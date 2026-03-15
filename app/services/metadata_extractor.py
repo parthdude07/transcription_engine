@@ -2,8 +2,6 @@ import json
 from app.transcript import Transcript
 from app.logging import get_logger
 from app.config import settings
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
 
 logger = get_logger()
 
@@ -19,7 +17,9 @@ class MetadataExtractorService:
 
     def __init__(self, model='gemini-3-flash-preview'):
         self.model = model
+        import google.generativeai as genai
         genai.configure(api_key=settings.GOOGLE_API_KEY)
+        self._genai = genai
 
     def process(self, transcript: Transcript, **kwargs):
         """
@@ -51,11 +51,11 @@ class MetadataExtractorService:
         prompt = self._build_prompt(title, description, channel_name, tags)
 
         try:
-            model = genai.GenerativeModel(
+            from google.generativeai.types import GenerationConfig
+            model = self._genai.GenerativeModel(
                 self.model,
                 generation_config=GenerationConfig(
                     max_output_tokens=1024,
-                    response_mime_type="application/json",
                 )
             )
             response = model.generate_content(

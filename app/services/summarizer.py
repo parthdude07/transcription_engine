@@ -2,8 +2,6 @@ from app.transcript import Transcript
 from app.logging import get_logger
 import openai
 from app.config import settings
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
 
 logger = get_logger()
 
@@ -18,9 +16,11 @@ class SummarizerService:
             self.client = openai
             self.client.api_key = settings.OPENAI_API_KEY
         elif self.provider == 'google':
+            import google.generativeai as genai
             genai.configure(api_key=settings.GOOGLE_API_KEY)
+            self._genai = genai
             if self.model == 'gpt-4o': # Default overwrite for google
-                self.model = 'gemini-2.0-flash'
+                self.model = 'gemini-3-flash-preview'
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
@@ -124,7 +124,8 @@ Provide a comprehensive summary covering the main topics, key arguments, and imp
                 )
                 return response.choices[0].message.content
             elif self.provider == 'google':
-                model = genai.GenerativeModel(
+                from google.generativeai.types import GenerationConfig
+                model = self._genai.GenerativeModel(
                     self.model,
                     generation_config=GenerationConfig(
                         max_output_tokens=4096,

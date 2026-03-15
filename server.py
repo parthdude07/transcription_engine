@@ -6,6 +6,7 @@ from app.exceptions import DuplicateSourceError
 from routes.curator import router as curator_router
 from routes.transcription import router as transcription_router
 from routes.media import router as media_router
+from routes.ingestion import router as ingestion_router
 
 app = FastAPI()
 
@@ -37,3 +38,4 @@ async def duplicate_source_exception_handler(request, exc: DuplicateSourceError)
 app.include_router(transcription_router, prefix="/transcription")
 app.include_router(curator_router, prefix="/curator")
 app.include_router(media_router, prefix="/media")
+app.include_router(ingestion_router, prefix="/ingestion")

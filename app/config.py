@@ -90,6 +90,11 @@ class Settings:
         return self._get_env_variable('OPENAI_API_KEY')
 
     @property
+    def YOUTUBE_API_KEY(self):
+        return self._get_env_variable('YOUTUBE_API_KEY',
+            "To use YouTube channel scanning you need to define a 'YOUTUBE_API_KEY' in your .env file")
+
+    @property
     def GOOGLE_API_KEY(self):
         return self._get_env_variable('GOOGLE_API_KEY')
 

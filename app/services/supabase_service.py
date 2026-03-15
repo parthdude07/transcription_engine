@@ -1,6 +1,3 @@
-"""
-Supabase Service for persisting transcripts to a Supabase database.
-"""
 import os
 from typing import Optional
 from app.config import settings
@@ -156,6 +153,285 @@ class SupabaseService:
             return result.data if result.data else []
         except Exception as e:
             logger.error(f"Failed to list transcripts from Supabase: {e}")
+            return []
+
+
+    # =========================================================================
+    # YouTube Ingestion — Channels
+    # =========================================================================
+
+    def get_active_channels(self) -> list:
+        """Get all active channels ordered by priority."""
+        if not self.is_available:
+            return []
+        try:
+            result = (
+                self._client.table("youtube_channels")
+                .select("*")
+                .eq("is_active", True)
+                .order("priority")
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Failed to get active channels: {e}")
+            return []
+
+    def get_channel_by_id(self, channel_id: str) -> Optional[dict]:
+        """Get a channel by its database UUID."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_channels")
+                .select("*")
+                .eq("id", channel_id)
+                .single()
+                .execute()
+            )
+            return result.data
+        except Exception as e:
+            logger.error(f"Failed to get channel {channel_id}: {e}")
+            return None
+
+    def list_channels(self) -> list:
+        """List all channels."""
+        if not self.is_available:
+            return []
+        try:
+            result = (
+                self._client.table("youtube_channels")
+                .select("*")
+                .order("channel_name")
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Failed to list channels: {e}")
+            return []
+
+    def add_channel(self, channel_data: dict) -> Optional[dict]:
+        """Insert a new channel."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_channels")
+                .insert(channel_data)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to add channel: {e}")
+            return None
+
+    def update_channel(self, channel_id: str, updates: dict) -> Optional[dict]:
+        """Update a channel by its database UUID."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_channels")
+                .update(updates)
+                .eq("id", channel_id)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to update channel {channel_id}: {e}")
+            return None
+
+    def delete_channel(self, channel_id: str) -> bool:
+        """Delete a channel by its database UUID."""
+        if not self.is_available:
+            return False
+        try:
+            self._client.table("youtube_channels").delete().eq(
+                "id", channel_id
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete channel {channel_id}: {e}")
+            return False
+
+    def update_channel_scanned(self, channel_id: str):
+        """Update last_scanned_at for a channel."""
+        if not self.is_available:
+            return
+        try:
+            from datetime import datetime, timezone
+            self._client.table("youtube_channels").update(
+                {"last_scanned_at": datetime.now(timezone.utc).isoformat()}
+            ).eq("id", channel_id).execute()
+        except Exception as e:
+            logger.error(f"Failed to update scan time for channel {channel_id}: {e}")
+
+    # =========================================================================
+    # YouTube Ingestion — Videos
+    # =========================================================================
+
+    def insert_youtube_video(self, video_data: dict) -> Optional[dict]:
+        """Insert a discovered video."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_videos")
+                .insert(video_data)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to insert video {video_data.get('video_id')}: {e}")
+            return None
+
+    def get_existing_video_ids(self, video_ids: list[str]) -> set:
+        """Check which video IDs already exist in the database."""
+        if not self.is_available or not video_ids:
+            return set()
+        try:
+            result = (
+                self._client.table("youtube_videos")
+                .select("video_id")
+                .in_("video_id", video_ids)
+                .execute()
+            )
+            return {row["video_id"] for row in (result.data or [])}
+        except Exception as e:
+            logger.error(f"Failed to check existing videos: {e}")
+            return set()
+
+    def get_videos_by_status(self, status: str, limit: int = 100) -> list:
+        """Get videos filtered by status."""
+        if not self.is_available:
+            return []
+        try:
+            result = (
+                self._client.table("youtube_videos")
+                .select("*, youtube_channels(channel_name, category)")
+                .eq("status", status)
+                .order("discovered_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Failed to get videos by status '{status}': {e}")
+            return []
+
+    def list_youtube_videos(
+        self,
+        status: Optional[str] = None,
+        is_technical: Optional[bool] = None,
+        channel_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list:
+        """List videos with optional filters."""
+        if not self.is_available:
+            return []
+        try:
+            query = (
+                self._client.table("youtube_videos")
+                .select("*, youtube_channels(channel_name, category)")
+                .order("discovered_at", desc=True)
+                .range(offset, offset + limit - 1)
+            )
+            if status:
+                query = query.eq("status", status)
+            if is_technical is not None:
+                query = query.eq("is_technical", is_technical)
+            if channel_id:
+                query = query.eq("channel_id", channel_id)
+            result = query.execute()
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Failed to list youtube videos: {e}")
+            return []
+
+    def get_video_by_id(self, video_id: str) -> Optional[dict]:
+        """Get a video by its database UUID, with channel info."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_videos")
+                .select("*, youtube_channels(channel_name, category)")
+                .eq("id", video_id)
+                .single()
+                .execute()
+            )
+            return result.data
+        except Exception as e:
+            logger.error(f"Failed to get video {video_id}: {e}")
+            return None
+
+    def update_youtube_video(self, video_id: str, updates: dict) -> Optional[dict]:
+        """Update a video by its database UUID."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("youtube_videos")
+                .update(updates)
+                .eq("id", video_id)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to update video {video_id}: {e}")
+            return None
+
+    # =========================================================================
+    # YouTube Ingestion — Runs
+    # =========================================================================
+
+    def create_ingestion_run(self, **kwargs) -> Optional[dict]:
+        """Create a new ingestion run record."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("ingestion_runs")
+                .insert(kwargs)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to create ingestion run: {e}")
+            return None
+
+    def complete_ingestion_run(self, run_id: str, **kwargs) -> Optional[dict]:
+        """Update a run with completion data."""
+        if not self.is_available:
+            return None
+        try:
+            result = (
+                self._client.table("ingestion_runs")
+                .update(kwargs)
+                .eq("id", run_id)
+                .execute()
+            )
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to complete ingestion run {run_id}: {e}")
+            return None
+
+    def list_ingestion_runs(self, limit: int = 50) -> list:
+        """List recent ingestion runs."""
+        if not self.is_available:
+            return []
+        try:
+            result = (
+                self._client.table("ingestion_runs")
+                .select("*, youtube_channels(channel_name)")
+                .order("created_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Failed to list ingestion runs: {e}")
             return []
 
 

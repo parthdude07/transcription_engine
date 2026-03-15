@@ -3,8 +3,6 @@ from app.logging import get_logger
 from app.services.global_tag_manager import GlobalTagManager
 import openai
 from app.config import settings
-import google.generativeai as genai
-from google.generativeai.types import GenerationConfig
 
 logger = get_logger()
 
@@ -20,7 +18,9 @@ class CorrectionService:
             self.client = openai
             self.client.api_key = settings.OPENAI_API_KEY
         elif self.provider == 'google':
+            import google.generativeai as genai
             genai.configure(api_key=settings.GOOGLE_API_KEY)
+            self._genai = genai
             if self.model == 'gpt-4o': # Default overwrite for google
                 self.model = 'gemini-2.0-flash'
         else:
@@ -81,7 +81,8 @@ class CorrectionService:
                     )
                     corrected_text = response.choices[0].message.content
                 elif self.provider == 'google':
-                    model = genai.GenerativeModel(
+                    from google.generativeai.types import GenerationConfig
+                    model = self._genai.GenerativeModel(
                         self.model,
                         generation_config=GenerationConfig(
                             max_output_tokens=8192,
