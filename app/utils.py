@@ -1,16 +1,17 @@
 import json
 import os
 import re
-from datetime import datetime, date
+from datetime import date, datetime
 
 from app.logging import get_logger
+
 
 logger = get_logger()
 
 
 def slugify(text):
-    text = text.replace('_', '-')
-    return re.sub(r'\W+', '-', text).strip('-').lower()
+    text = text.replace("_", "-")
+    return re.sub(r"\W+", "-", text).strip("-").lower()
 
 
 def decimal_to_sexagesimal(dec):
@@ -26,7 +27,7 @@ def check_if_valid_json(file_path):
         with open(file_path) as file:
             json_content = json.load(file)
         return json_content
-    except Exception as e:
+    except Exception:
         raise Exception(f"Not a valid JSON file: {file_path}")
 
 
@@ -35,7 +36,9 @@ def check_if_valid_file_path(file_path):
         raise Exception(f"Not a valid file: {file_path}")
 
 
-def validate_and_parse_date(date_str: str, expected_format: str = "%Y-%m-%d") -> date:
+def validate_and_parse_date(
+    date_str: str, expected_format: str = "%Y-%m-%d"
+) -> date:
     """
     Validates that a given date string matches the expected date format and returns a date object.
     If the date string does not match the format, an exception is raised.
@@ -46,7 +49,8 @@ def validate_and_parse_date(date_str: str, expected_format: str = "%Y-%m-%d") ->
     except ValueError:
         # The date string did not match the expected format
         raise Exception(
-            f"The provided date '{date_str}' does not match the expected format '{expected_format}'.")
+            f"The provided date '{date_str}' does not match the expected format '{expected_format}'."
+        )
 
 
 def configure_metadata_given_from_JSON(source, from_json=None):
@@ -67,14 +71,17 @@ def configure_metadata_given_from_JSON(source, from_json=None):
         metadata["summary"] = source.get("summary", None)
         metadata["episode"] = source.get("episode", None)
         metadata["additional_resources"] = source.get(
-            "additional_resources", None)
+            "additional_resources", None
+        )
         metadata["cutoff_date"] = source.get("cutoff_date", None)
         metadata["youtube_metadata"] = source.get("youtube", None)
         metadata["media"] = source.get("media", None)
         excluded_media = source.get(
-            "existing_entries_not_covered_by_btctranscripts/status.json", [])
-        metadata["excluded_media"] = [entry["media"]
-                                      for entry in excluded_media]
+            "existing_entries_not_covered_by_btctranscripts/status.json", []
+        )
+        metadata["excluded_media"] = [
+            entry["media"] for entry in excluded_media
+        ]
         # transcription service output
         services = ["whisper", "deepgram"]
         for service in services:

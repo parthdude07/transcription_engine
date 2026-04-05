@@ -1,25 +1,39 @@
-[tool.black]
+[tool.ruff]
 line-length = 80
-target-version = ['py39']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git     # exclude the ".git" directory
-  | \.github  # exclude the ".github" directory
-  | \.pytest_cache # exclude the ".pytest_cache" directory
-  | venv    # exclude the ".venv" directory
-  | \.idea    # exclude the "idea" directory 
-  | __pycache__ # exclude "pycache" directory
-  | .*egg-info
-)/
-'''
+target-version = "py39"
+exclude = [
+    ".git",
+    ".github",
+    ".pytest_cache",
+    "venv",
+    ".venv",
+    ".idea",
+    "__pycache__",
+    "*.egg-info",
+    "build",
+]
 
-[tool.isort]
-profile = "black"
-combine_as_imports = true
-line_length = 80
-lines_after_imports = 2
-multi_line_output = 3
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults (FastAPI uses this)
+    "B904",   # raise from in except — existing codebase pattern, fix incrementally
+    "B006",   # mutable default arguments — existing codebase pattern, fix incrementally
+    "SIM102", # nested if statements — sometimes clearer than combined conditions
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"

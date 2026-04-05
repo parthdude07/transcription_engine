@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
-from typing import Optional
+
+from dateutil import parser as dateparser
 
 from app.config import settings
 from app.logging import get_logger
-from app.services.supabase_service import get_supabase_service
+from app.services.database_service import get_database_service
+
 
 logger = get_logger()
 
@@ -13,12 +15,13 @@ class ChannelScanner:
 
     def __init__(self):
         self._youtube = None
-        self._supabase = get_supabase_service()
+        self._db = get_database_service()
 
     @property
     def youtube(self):
         if self._youtube is None:
             from googleapiclient.discovery import build
+
             self._youtube = build(
                 "youtube", "v3", developerKey=settings.YOUTUBE_API_KEY
             )
@@ -30,13 +33,13 @@ class ChannelScanner:
         Returns:
             Summary dict with counts and any errors.
         """
-        channels = self._supabase.get_active_channels()
+        channels = self._db.get_active_channels()
         if not channels:
             logger.info("No active channels to scan.")
             return {"videos_discovered": 0, "errors": []}
 
-        run = self._supabase.create_ingestion_run(
-            run_type="scan", started_at=datetime.now(timezone.utc).isoformat()
+        run = self._db.create_ingestion_run(
+            run_type="scan", started_at=datetime.now(timezone.utc)
         )
         run_id = run["id"] if run else None
 
@@ -53,11 +56,11 @@ class ChannelScanner:
                 errors.append(error_msg)
 
         if run_id:
-            self._supabase.complete_ingestion_run(
+            self._db.complete_ingestion_run(
                 run_id,
                 videos_discovered=total_discovered,
                 errors=errors,
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         logger.info(f"Scan complete: {total_discovered} new videos discovered.")
@@ -72,14 +75,14 @@ class ChannelScanner:
         Returns:
             Summary dict.
         """
-        channel = self._supabase.get_channel_by_id(channel_db_id)
+        channel = self._db.get_channel_by_id(channel_db_id)
         if not channel:
             raise ValueError(f"Channel not found: {channel_db_id}")
 
-        run = self._supabase.create_ingestion_run(
+        run = self._db.create_ingestion_run(
             run_type="scan",
             channel_id=channel_db_id,
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(timezone.utc),
         )
         run_id = run["id"] if run else None
         errors = []
@@ -93,11 +96,11 @@ class ChannelScanner:
             count = 0
 
         if run_id:
-            self._supabase.complete_ingestion_run(
+            self._db.complete_ingestion_run(
                 run_id,
                 videos_discovered=count,
                 errors=errors,
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         return {"videos_discovered": count, "errors": errors}
@@ -115,9 +118,7 @@ class ChannelScanner:
         channel_db_id = channel["id"]
         last_scanned = channel.get("last_scanned_at")
 
-        max_results = int(
-            settings.config.get("channel_scan_max_results", "50")
-        )
+        max_results = int(settings.config.get("channel_scan_max_results", "50"))
 
         # Build search request
         search_params = {
@@ -130,7 +131,9 @@ class ChannelScanner:
         if last_scanned:
             search_params["publishedAfter"] = self._format_rfc3339(last_scanned)
 
-        logger.info(f"Scanning channel: {channel['channel_name']} ({channel_yt_id})")
+        logger.info(
+            f"Scanning channel: {channel['channel_name']} ({channel_yt_id})"
+        )
 
         # Paginate through search results
         video_ids = []
@@ -145,16 +148,18 @@ class ChannelScanner:
 
         if not video_ids:
             logger.info(f"No new videos found for {channel['channel_name']}.")
-            self._supabase.update_channel_scanned(channel_db_id)
+            self._db.update_channel_scanned(channel_db_id)
             return 0
 
         # Filter out videos we already have
-        existing = self._supabase.get_existing_video_ids(video_ids)
+        existing = self._db.get_existing_video_ids(video_ids)
         new_ids = [vid for vid in video_ids if vid not in existing]
 
         if not new_ids:
-            logger.info(f"All videos already known for {channel['channel_name']}.")
-            self._supabase.update_channel_scanned(channel_db_id)
+            logger.info(
+                f"All videos already known for {channel['channel_name']}."
+            )
+            self._db.update_channel_scanned(channel_db_id)
             return 0
 
         # Fetch full video details in batches of 50
@@ -163,16 +168,18 @@ class ChannelScanner:
             batch = new_ids[i : i + 50]
             details_response = (
                 self.youtube.videos()
-                .list(part="snippet,contentDetails,statistics", id=",".join(batch))
+                .list(
+                    part="snippet,contentDetails,statistics", id=",".join(batch)
+                )
                 .execute()
             )
 
             for item in details_response.get("items", []):
                 video_data = self._parse_video_details(item, channel_db_id)
-                self._supabase.insert_youtube_video(video_data)
+                self._db.insert_youtube_video(video_data)
                 videos_inserted += 1
 
-        self._supabase.update_channel_scanned(channel_db_id)
+        self._db.update_channel_scanned(channel_db_id)
         logger.info(
             f"Discovered {videos_inserted} new videos from {channel['channel_name']}."
         )
@@ -189,8 +196,12 @@ class ChannelScanner:
             "channel_id": channel_db_id,
             "title": snippet.get("title"),
             "description": snippet.get("description"),
-            "published_at": snippet.get("publishedAt"),
-            "duration": self._parse_duration(content_details.get("duration", "")),
+            "published_at": dateparser.isoparse(snippet["publishedAt"])
+            if snippet.get("publishedAt")
+            else None,
+            "duration": self._parse_duration(
+                content_details.get("duration", "")
+            ),
             "tags": snippet.get("tags", []),
             "thumbnail_url": (
                 snippet.get("thumbnails", {}).get("high", {}).get("url")

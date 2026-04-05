@@ -2,8 +2,8 @@ import pytest
 
 from app.exporters import (
     ExporterFactory,
-    MarkdownExporter,
     JsonExporter,
+    MarkdownExporter,
     TextExporter,
 )
 

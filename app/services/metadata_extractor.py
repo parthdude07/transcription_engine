@@ -1,7 +1,9 @@
 import json
-from app.transcript import Transcript
-from app.logging import get_logger
+
 from app.config import settings
+from app.logging import get_logger
+from app.transcript import Transcript
+
 
 logger = get_logger()
 
@@ -10,14 +12,15 @@ class MetadataExtractorService:
     """
     Extracts structured metadata (speakers, conference, topics) from YouTube
     video metadata using a single Gemini LLM call per video.
-    
+
     Runs as a processing service in the transcription pipeline, before
     correction and summarization, so extracted metadata enriches those steps.
     """
 
-    def __init__(self, model='gemini-3-flash-preview'):
+    def __init__(self, model="gemini-3-flash-preview"):
         self.model = model
         import google.generativeai as genai
+
         genai.configure(api_key=settings.GOOGLE_API_KEY)
         self._genai = genai
 
@@ -30,17 +33,17 @@ class MetadataExtractorService:
         source = transcript.source
 
         # Only run for sources with YouTube metadata
-        youtube_metadata = getattr(source, 'youtube_metadata', None)
+        youtube_metadata = getattr(source, "youtube_metadata", None)
         if not youtube_metadata:
             logger.debug(
                 f"Skipping metadata extraction for '{source.title}': no YouTube metadata"
             )
             return
 
-        title = source.title or ''
-        description = youtube_metadata.get('description', '') or ''
-        channel_name = youtube_metadata.get('channel_name', '') or ''
-        tags = youtube_metadata.get('tags', []) or []
+        title = source.title or ""
+        description = youtube_metadata.get("description", "") or ""
+        channel_name = youtube_metadata.get("channel_name", "") or ""
+        tags = youtube_metadata.get("tags", []) or []
         if isinstance(tags, str):
             tags = [tags]
 
@@ -52,34 +55,34 @@ class MetadataExtractorService:
 
         try:
             from google.generativeai.types import GenerationConfig
+
             model = self._genai.GenerativeModel(
                 self.model,
                 generation_config=GenerationConfig(
                     max_output_tokens=1024,
-                )
+                ),
             )
             response = model.generate_content(
-                prompt,
-                request_options={"timeout": 60}
+                prompt, request_options={"timeout": 60}
             )
 
             extracted = self._parse_response(response.text)
 
             # Update speakers only if they weren't manually provided
             if not source.speakers or source.speakers == []:
-                extracted_speakers = extracted.get('speakers', [])
+                extracted_speakers = extracted.get("speakers", [])
                 if extracted_speakers:
                     source.speakers = extracted_speakers
                     logger.info(f"  Extracted speakers: {source.speakers}")
 
             # Set conference (new field)
-            conference = extracted.get('conference', '')
+            conference = extracted.get("conference", "")
             if conference:
                 source.conference = conference
                 logger.info(f"  Extracted conference: {conference}")
 
             # Set topics (new field)
-            topics = extracted.get('topics', [])
+            topics = extracted.get("topics", [])
             if topics:
                 source.topics = topics
                 logger.info(f"  Extracted topics: {topics}")
@@ -95,9 +98,11 @@ class MetadataExtractorService:
     def _build_prompt(self, title, description, channel_name, tags):
         """Build the extraction prompt for the LLM."""
         # Truncate description to avoid huge prompts
-        desc_truncated = description[:800] if len(description) > 800 else description
+        desc_truncated = (
+            description[:800] if len(description) > 800 else description
+        )
 
-        tags_str = ', '.join(tags[:20]) if tags else 'None'
+        tags_str = ", ".join(tags[:20]) if tags else "None"
 
         prompt = (
             "You are a metadata extraction specialist for Bitcoin conference talks and presentations.\n\n"
@@ -132,36 +137,40 @@ class MetadataExtractorService:
         try:
             # Clean up potential markdown code blocks
             text = response_text.strip()
-            if text.startswith('```'):
+            if text.startswith("```"):
                 # Remove markdown wrapper
-                lines = text.split('\n')
-                text = '\n'.join(lines[1:-1])
-            
+                lines = text.split("\n")
+                text = "\n".join(lines[1:-1])
+
             result = json.loads(text)
 
             # Validate and normalize the response
-            speakers = result.get('speakers', [])
+            speakers = result.get("speakers", [])
             if not isinstance(speakers, list):
                 speakers = [speakers] if speakers else []
-            speakers = [s.strip() for s in speakers if isinstance(s, str) and s.strip()]
+            speakers = [
+                s.strip() for s in speakers if isinstance(s, str) and s.strip()
+            ]
 
-            conference = result.get('conference', '')
+            conference = result.get("conference", "")
             if not isinstance(conference, str):
-                conference = str(conference) if conference else ''
+                conference = str(conference) if conference else ""
             conference = conference.strip()
 
-            topics = result.get('topics', [])
+            topics = result.get("topics", [])
             if not isinstance(topics, list):
                 topics = [topics] if topics else []
-            topics = [t.strip() for t in topics if isinstance(t, str) and t.strip()]
+            topics = [
+                t.strip() for t in topics if isinstance(t, str) and t.strip()
+            ]
 
             return {
-                'speakers': speakers,
-                'conference': conference,
-                'topics': topics
+                "speakers": speakers,
+                "conference": conference,
+                "topics": topics,
             }
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"Failed to parse metadata extraction response: {e}")
             logger.debug(f"Raw response: {response_text}")
-            return {'speakers': [], 'conference': '', 'topics': []}
+            return {"speakers": [], "conference": "", "topics": []}

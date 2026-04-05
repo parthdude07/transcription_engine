@@ -1,14 +1,7 @@
-import logging
 import os
 import tempfile
-from datetime import (
-    datetime,
-    date
-)
-from typing import (
-    Optional,
-    TypedDict
-)
+from datetime import date, datetime
+from typing import Optional, TypedDict
 
 import feedparser
 import requests
@@ -16,13 +9,9 @@ import static_ffmpeg
 import yt_dlp
 from clint.textui import progress
 
-from app import (
-    __app_name__,
-    __version__,
-    logging,
-    utils
-)
+from app import logging, utils
 from app.media_processor import MediaProcessor
+
 
 logger = logging.get_logger()
 
@@ -40,7 +29,9 @@ class Output(TypedDict):
 
 class Transcript:
     def __init__(self, source, test_mode=False, metadata_file=None):
-        self.status = "queued" # Can be "queued", "in_progress", "completed", or "failed"
+        self.status = (
+            "queued"  # Can be "queued", "in_progress", "completed", or "failed"
+        )
         self.source: Source = source
         self.metadata_file = metadata_file
         self.test_mode = test_mode
@@ -52,7 +43,7 @@ class Transcript:
             "text": None,
             "transcription_service_output_file": None,
             "srt_file": None,
-            "dpe_file": None
+            "dpe_file": None,
         }
 
     def process_source(self, tmp_dir=None):
@@ -77,10 +68,13 @@ class Transcript:
         self.source.summary = value
 
     def __str__(self):
-        excluded_fields = ['test_mode', 'logger']
-        fields = {key: value for key, value in self.__dict__.items()
-                  if key not in excluded_fields}
-        fields['source'] = str(self.source)
+        excluded_fields = ["test_mode", "logger"]
+        fields = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in excluded_fields
+        }
+        fields["source"] = str(self.source)
         return f"Transcript:{str(fields)}"
 
     def to_json(self):
@@ -96,20 +90,58 @@ class Transcript:
         if not self.source.local:
             json_data["media"] = self.source.media
         if self.source.date:
-            json_data['date'] = self.source.date.isoformat()
+            json_data["date"] = self.source.date.isoformat()
 
         return json_data
 
 
 class Source:
-    def __init__(self, source_file, loc, local, title, date, tags, category, speakers, preprocess, summary=None, episode=None, link=None):
+    def __init__(
+        self,
+        source_file,
+        loc,
+        local,
+        title,
+        date,
+        tags,
+        category,
+        speakers,
+        preprocess,
+        summary=None,
+        episode=None,
+        link=None,
+    ):
         # initialize source with arguments
-        self.save_source(source_file=source_file, loc=loc, local=local, title=title, summary=summary,
-                         episode=episode, tags=tags, category=category, speakers=speakers, preprocess=preprocess, link=link)
+        self.save_source(
+            source_file=source_file,
+            loc=loc,
+            local=local,
+            title=title,
+            summary=summary,
+            episode=episode,
+            tags=tags,
+            category=category,
+            speakers=speakers,
+            preprocess=preprocess,
+            link=link,
+        )
         self.__config_event_date(date)
         self.logger = logging.get_logger()
 
-    def save_source(self, source_file, loc, local, title, summary, episode, tags, category, speakers, preprocess, link):
+    def save_source(
+        self,
+        source_file,
+        loc,
+        local,
+        title,
+        summary,
+        episode,
+        tags,
+        category,
+        speakers,
+        preprocess,
+        link,
+    ):
         self.source_file = source_file
         self.link = link  # the url that will be used as `media` for the transcript. It contains more metadata than just the audio download link
         self.loc = loc.strip("/")
@@ -160,7 +192,8 @@ class Source:
             else:
                 # Raise an error if date_input is neither a string nor a datetime.date
                 raise TypeError(
-                    "The date must be a string or datetime.date object.")
+                    "The date must be a string or datetime.date object."
+                )
 
     def initialize(self):
         try:
@@ -168,7 +201,7 @@ class Source:
             self.logger.debug("Initializing FFMPEG...")
             static_ffmpeg.add_paths()
             self.logger.debug("Initialized FFMPEG")
-        except Exception as e:
+        except Exception:
             raise Exception("Error initializing")
 
     def __str__(self):
@@ -180,50 +213,67 @@ class Source:
                 if key in default_print_keys or not isinstance(value, list):
                     fields[key] = value
                 else:
-                    fields[key] = f"{len(value)} {type(value[0]).__name__ if value else 'unknown'}"
+                    fields[key] = (
+                        f"{len(value)} {type(value[0]).__name__ if value else 'unknown'}"
+                    )
         return f"Source:{str(fields)}"
 
     def to_json(self):
         json_data = {
-            'title': self.title,
-            'speakers': self.speakers,
-            'tags': self.tags,
-            'type': self.type,
-            'loc': self.loc,
+            "title": self.title,
+            "speakers": self.speakers,
+            "tags": self.tags,
+            "type": self.type,
+            "loc": self.loc,
             "source_file": self.source_file,
             "media": self.media,
-            'categories': self.category,
-            'chapters': self.chapters,
+            "categories": self.category,
+            "chapters": self.chapters,
         }
         if self.description:
-            json_data['description'] = self.description
+            json_data["description"] = self.description
         if self.date:
-            json_data['date'] = self.date.isoformat()
+            json_data["date"] = self.date.isoformat()
         if self.summary:
-            json_data['summary'] = self.summary
+            json_data["summary"] = self.summary
         if self.additional_resources:
-            json_data['additional_resources'] = self.additional_resources
+            json_data["additional_resources"] = self.additional_resources
         if self.episode:
-            json_data['episode'] = self.episode
+            json_data["episode"] = self.episode
         if self.conference:
-            json_data['conference'] = self.conference
+            json_data["conference"] = self.conference
         if self.topics:
-            json_data['topics'] = self.topics
+            json_data["topics"] = self.topics
         return json_data
 
 
 class Audio(Source):
-    def __init__(self, source, description=None, chapters=[]):
+    def __init__(self, source, description=None, chapters=None):
+        if chapters is None:
+            chapters = []
         try:
             # initialize source using a base Source
-            super().__init__(source_file=source.source_file, link=source.link, loc=source.loc, local=source.local, title=source.title, summary=source.summary,
-                             episode=source.episode, date=source.event_date, tags=source.tags, category=source.category, speakers=source.speakers, preprocess=source.preprocess)
+            super().__init__(
+                source_file=source.source_file,
+                link=source.link,
+                loc=source.loc,
+                local=source.local,
+                title=source.title,
+                summary=source.summary,
+                episode=source.episode,
+                date=source.event_date,
+                tags=source.tags,
+                category=source.category,
+                speakers=source.speakers,
+                preprocess=source.preprocess,
+            )
             self.type = "audio"
             self.description = description
             self.chapters = chapters
             if self.title is None:
                 self.title = os.path.splitext(
-                    os.path.basename(self.source_file))[0]
+                    os.path.basename(self.source_file)
+                )[0]
         except Exception as e:
             raise Exception(f"Error during Audio creation: {e}")
 
@@ -239,16 +289,20 @@ class Audio(Source):
             try:
                 audio = requests.get(self.source_file, stream=True)
                 output_file = os.path.join(
-                    working_dir, f"{utils.slugify(self.title)}.mp3")
+                    working_dir, f"{utils.slugify(self.title)}.mp3"
+                )
                 with open(output_file, "wb") as f:
                     chunked_audio = audio.iter_content(chunk_size=1024)
                     total_length = audio.headers.get("content-length")
                     if total_length is None:
                         self.logger.warning(
-                            "Content length not available. Unable to display progress bar.")
+                            "Content length not available. Unable to display progress bar."
+                        )
                     else:
                         chunked_audio = progress.bar(
-                            chunked_audio, expected_size=(int(total_length) / 1024) + 1)
+                            chunked_audio,
+                            expected_size=(int(total_length) / 1024) + 1,
+                        )
                     for chunk in chunked_audio:
                         if chunk:
                             f.write(chunk)
@@ -269,7 +323,8 @@ class Audio(Source):
             if not audio_file_path.endswith(".mp3"):
                 media_processor = MediaProcessor()
                 audio_file_path = media_processor.convert_to_mp3(
-                    audio_file_path, working_dir)
+                    audio_file_path, working_dir
+                )
             # return the audio file that is now ready for transcription
             return audio_file_path
 
@@ -277,9 +332,12 @@ class Audio(Source):
             raise Exception(f"Error processing audio file: {e}")
 
     def __str__(self):
-        excluded_fields = ['logger']
-        fields = {key: value for key, value in self.__dict__.items()
-                  if key not in excluded_fields}
+        excluded_fields = ["logger"]
+        fields = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in excluded_fields
+        }
         return f"Audio:{str(fields)}"
 
     def to_json(self):
@@ -289,11 +347,25 @@ class Audio(Source):
 
 
 class Video(Source):
-    def __init__(self, source, youtube_metadata=None, chapters=[]):
+    def __init__(self, source, youtube_metadata=None, chapters=None):
+        if chapters is None:
+            chapters = []
         try:
             # initialize source using a base Source
-            super().__init__(source_file=source.source_file, link=source.link, loc=source.loc, local=source.local, title=source.title, summary=source.summary,
-                             episode=source.episode, date=source.event_date, tags=source.tags, category=source.category, speakers=source.speakers, preprocess=source.preprocess)
+            super().__init__(
+                source_file=source.source_file,
+                link=source.link,
+                loc=source.loc,
+                local=source.local,
+                title=source.title,
+                summary=source.summary,
+                episode=source.episode,
+                date=source.event_date,
+                tags=source.tags,
+                category=source.category,
+                speakers=source.speakers,
+                preprocess=source.preprocess,
+            )
             self.type = "video"
             self.youtube_metadata = youtube_metadata
             self.chapters = chapters
@@ -307,7 +379,11 @@ class Video(Source):
 
     @property
     def description(self):
-        return self.youtube_metadata.get("description", None) if self.youtube_metadata else None
+        return (
+            self.youtube_metadata.get("description", None)
+            if self.youtube_metadata
+            else None
+        )
 
     @description.setter
     def description(self, value):
@@ -318,29 +394,34 @@ class Video(Source):
     def download_video_metadata(self):
         self.logger.debug(f"Downloading metadata from: {self.source_file}")
         ydl_opts = {
-            'quiet': True,  # Suppress console output
-            'extract_flat': True,  # Extract only metadata without downloading
+            "quiet": True,  # Suppress console output
+            "extract_flat": True,  # Extract only metadata without downloading
         }
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 yt_info = ydl.extract_info(self.source_file, download=False)
                 if self.title is None:
-                    self.title = yt_info.get('title', 'N/A')
+                    self.title = yt_info.get("title", "N/A")
                 self.youtube_metadata = {
-                    "description": yt_info.get('description', 'N/A'),
-                    "tags": yt_info.get('tags', 'N/A'),
-                    "categories": yt_info.get('categories', 'N/A'),
-                    "channel_name": yt_info.get('channel', '') or yt_info.get('uploader', ''),
+                    "description": yt_info.get("description", "N/A"),
+                    "tags": yt_info.get("tags", "N/A"),
+                    "categories": yt_info.get("categories", "N/A"),
+                    "channel_name": yt_info.get("channel", "")
+                    or yt_info.get("uploader", ""),
                 }
-                if self.event_date is None and yt_info.get('upload_date', None):
+                if self.event_date is None and yt_info.get("upload_date", None):
                     self.event_date = datetime.strptime(
-                        yt_info.get('upload_date', None), "%Y%m%d").date()
+                        yt_info.get("upload_date", None), "%Y%m%d"
+                    ).date()
                 # Extract chapters from video's metadata
                 self.chapters = []
-                has_chapters = yt_info.get('chapters', None)
+                has_chapters = yt_info.get("chapters", None)
                 if has_chapters:
                     # YouTube adds an extra chapter when a starting chapter is not defined
-                    if yt_info["chapters"][0]["title"] == '<Untitled Chapter 1>':
+                    if (
+                        yt_info["chapters"][0]["title"]
+                        == "<Untitled Chapter 1>"
+                    ):
                         yt_info["chapters"].pop(0)
                     for index, x in enumerate(yt_info["chapters"]):
                         name = x["title"]
@@ -360,7 +441,7 @@ class Video(Source):
             try:
                 self.logger.debug(f"Downloading video: {self.source_file}")
                 ydl_opts = {
-                    "format": 'worstvideo+worstaudio/worst',
+                    "format": "worstvideo+worstaudio/worst",
                     "outtmpl": os.path.join(working_dir, "videoFile.%(ext)s"),
                     "nopart": True,
                 }
@@ -371,7 +452,9 @@ class Video(Source):
                     output_file = os.path.join(working_dir, f"videoFile.{ext}")
                     if os.path.exists(output_file):
                         return os.path.abspath(output_file)
-                raise Exception("Downloaded file not found in expected formats.")
+                raise Exception(
+                    "Downloaded file not found in expected formats."
+                )
 
                 return os.path.abspath(output_file)
             except Exception as e:
@@ -388,28 +471,32 @@ class Video(Source):
                     # Attempt to get the worst quality mp4 video and the best quality m4a audio, and combine them.
                     # If that's not possible, it will try to get the worst quality video and the best quality audio of any format and combine them.
                     # If that also fails, it will just grab the worst quality version of the video it can find, in any format.
-                    format_selector='worstvideo[ext=mp4]+bestaudio[ext=m4a]/worstvideo+bestaudio/worst',
-                    filename_template='videoFile.%(ext)s'
+                    format_selector="worstvideo[ext=mp4]+bestaudio[ext=m4a]/worstvideo+bestaudio/worst",
+                    filename_template="videoFile.%(ext)s",
                 )
             else:
                 video_file_path = os.path.abspath(self.source_file)
 
             audio_file = media_processor.convert_to_mp3(
-                video_file_path, working_dir)
+                video_file_path, working_dir
+            )
             return audio_file
 
         except Exception as e:
             raise Exception(f"Error processing video file: {e}")
 
     def __str__(self):
-        excluded_fields = ['logger']
-        fields = {key: value for key, value in self.__dict__.items()
-                  if key not in excluded_fields}
+        excluded_fields = ["logger"]
+        fields = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key not in excluded_fields
+        }
         return f"Video:{str(fields)}"
 
     def to_json(self):
         json_data = super().to_json()
-        json_data['youtube'] = self.youtube_metadata
+        json_data["youtube"] = self.youtube_metadata
 
         return json_data
 
@@ -418,8 +505,20 @@ class Playlist(Source):
     def __init__(self, source, entries):
         try:
             # initialize source using a base Source
-            super().__init__(source_file=source.source_file, link=source.link, loc=source.loc, local=source.local, title=source.title, summary=source.summary,
-                             episode=source.episode, date=source.event_date, tags=source.tags, category=source.category, speakers=source.speakers, preprocess=source.preprocess)
+            super().__init__(
+                source_file=source.source_file,
+                link=source.link,
+                loc=source.loc,
+                local=source.local,
+                title=source.title,
+                summary=source.summary,
+                episode=source.episode,
+                date=source.event_date,
+                tags=source.tags,
+                category=source.category,
+                speakers=source.speakers,
+                preprocess=source.preprocess,
+            )
             self.__config_source(entries)
         except Exception as e:
             raise Exception(f"Error during Playlist creation: {e}")
@@ -428,16 +527,39 @@ class Playlist(Source):
         self.type = "playlist"
         self.videos: Video = []
         for entry in entries:
-            if entry["title"] != '[Private video]':
-                source = Video(source=Source(source_file=entry["url"], loc=self.loc, local=self.local, title=entry["title"], date=self.event_date,
-                                             tags=self.tags, category=self.category, speakers=self.speakers, preprocess=self.preprocess))
+            if entry["title"] != "[Private video]":
+                source = Video(
+                    source=Source(
+                        source_file=entry["url"],
+                        loc=self.loc,
+                        local=self.local,
+                        title=entry["title"],
+                        date=self.event_date,
+                        tags=self.tags,
+                        category=self.category,
+                        speakers=self.speakers,
+                        preprocess=self.preprocess,
+                    )
+                )
                 self.videos.append(source)
 
 
 class RSS(Source):
     def __init__(self, source):
-        super().__init__(source_file=source.source_file, link=source.link, loc=source.loc, local=source.local, title=source.title, summary=source.summary,
-                         episode=source.episode, date=source.event_date, tags=source.tags, category=source.category, speakers=source.speakers, preprocess=source.preprocess)
+        super().__init__(
+            source_file=source.source_file,
+            link=source.link,
+            loc=source.loc,
+            local=source.local,
+            title=source.title,
+            summary=source.summary,
+            episode=source.episode,
+            date=source.event_date,
+            tags=source.tags,
+            category=source.category,
+            speakers=source.speakers,
+            preprocess=source.preprocess,
+        )
         self.type = "rss"
         self.entries = []
         self.__config_source()
@@ -448,21 +570,52 @@ class RSS(Source):
             self.title = rss.feed.title
             self.author = rss.feed.author
             self.logger.info(
-                f"RSS feed detected: {self.title} by {self.author}")
-        except Exception as e:
+                f"RSS feed detected: {self.title} by {self.author}"
+            )
+        except Exception:
             raise Exception(f"Invalid source: {self.source_file}")
         for entry in rss.entries:
             enclosure = next(
-                (link for link in entry.links if link.get('rel') == 'enclosure'), None)
-            if enclosure.type in ['audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/mp4']:
+                (
+                    link
+                    for link in entry.links
+                    if link.get("rel") == "enclosure"
+                ),
+                None,
+            )
+            if enclosure.type in [
+                "audio/mpeg",
+                "audio/wav",
+                "audio/x-m4a",
+                "audio/mp4",
+            ]:
                 published_date = date(*entry.published_parsed[:3])
                 # Attempt to extract episode information
-                episode = int(
-                    entry.itunes_episode) if 'itunes_episode' in entry else None
+                episode = (
+                    int(entry.itunes_episode)
+                    if "itunes_episode" in entry
+                    else None
+                )
 
-                source = Audio(Source(source_file=enclosure.href, loc=self.loc, local=self.local, title=entry.title, date=published_date, summary=self.summary, episode=episode, tags=self.tags,
-                               category=self.category, speakers=self.speakers, preprocess=self.preprocess, link=entry.link), description=entry.description)
+                source = Audio(
+                    Source(
+                        source_file=enclosure.href,
+                        loc=self.loc,
+                        local=self.local,
+                        title=entry.title,
+                        date=published_date,
+                        summary=self.summary,
+                        episode=episode,
+                        tags=self.tags,
+                        category=self.category,
+                        speakers=self.speakers,
+                        preprocess=self.preprocess,
+                        link=entry.link,
+                    ),
+                    description=entry.description,
+                )
                 self.entries.append(source)
             else:
                 self.logger.warning(
-                    f"Invalid source for '{entry.title}'. '{enclosure.type}' not supported for RSS feeds, source skipped.")
+                    f"Invalid source for '{entry.title}'. '{enclosure.type}' not supported for RSS feeds, source skipped."
+                )

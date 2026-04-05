@@ -1,9 +1,9 @@
 import os.path
 
 import pytest
+from test_helpers import check_md_file
 
 from app.transcription import Transcription
-from test_helpers import check_md_file
 
 
 def rel_path(path):
@@ -14,8 +14,8 @@ def rel_path(path):
 
 @pytest.mark.feature
 def test_audio_with_title():
-    with open(rel_path("testAssets/transcript.txt"), "r") as file:
-        result = file.read()
+    with open(rel_path("testAssets/transcript.txt")) as file:
+        file.read()
         file.close()
     source = rel_path("testAssets/audio.mp3")
     title = "title"
@@ -38,8 +38,8 @@ def test_audio_with_title():
 
 @pytest.mark.feature
 def test_audio_with_all_data():
-    with open(rel_path("testAssets/transcript.txt"), "r") as file:
-        result = file.read()
+    with open(rel_path("testAssets/transcript.txt")) as file:
+        file.read()
         file.close()
     source = rel_path("testAssets/audio.mp3")
     username = "username"
@@ -52,7 +52,13 @@ def test_audio_with_all_data():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file=source, title=title, date=date, tags=tags, category=category, speakers=speakers)
+        source_file=source,
+        title=title,
+        date=date,
+        tags=tags,
+        category=category,
+        speakers=speakers,
+    )
     transcripts = transcription.start()
 
     assert os.path.isfile(transcripts[0].outputs["markdown"])

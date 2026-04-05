@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from typing import Optional
 
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
 from app.logging import get_logger
-from app.services.supabase_service import get_supabase_service
+from app.services.database_service import get_database_service
+
 
 logger = get_logger()
 router = APIRouter(tags=["Ingestion"])
@@ -33,16 +35,14 @@ class VideoOverride(BaseModel):
     classification_reason: Optional[str] = None
 
 
-
-def _get_supabase():
-    supabase = get_supabase_service()
-    if not supabase.is_available:
+def _get_db():
+    db = get_database_service()
+    if not db.is_available:
         raise HTTPException(
             status_code=503,
-            detail="Database not configured. Set SUPABASE_URL and SUPABASE_KEY.",
+            detail="Database not configured. Set DATABASE_URL environment variable.",
         )
-    return supabase
-
+    return db
 
 
 @router.post("/run")
@@ -92,16 +92,16 @@ async def scan_channel(channel_id: str):
 @router.get("/channels")
 async def list_channels():
     """List all monitored channels."""
-    supabase = _get_supabase()
-    data = supabase.list_channels()
+    db = _get_db()
+    data = db.list_channels()
     return {"data": data}
 
 
 @router.post("/channels")
 async def add_channel(channel: ChannelCreate):
     """Add a new channel to monitor."""
-    supabase = _get_supabase()
-    result = supabase.add_channel(channel.model_dump())
+    db = _get_db()
+    result = db.add_channel(channel.model_dump())
     if result is None:
         raise HTTPException(status_code=500, detail="Failed to add channel.")
     return {"status": "success", "data": result}
@@ -110,11 +110,13 @@ async def add_channel(channel: ChannelCreate):
 @router.put("/channels/{channel_id}")
 async def update_channel(channel_id: str, updates: ChannelUpdate):
     """Update a monitored channel."""
-    supabase = _get_supabase()
-    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
+    db = _get_db()
+    update_data = {
+        k: v for k, v in updates.model_dump().items() if v is not None
+    }
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update.")
-    result = supabase.update_channel(channel_id, update_data)
+    result = db.update_channel(channel_id, update_data)
     if result is None:
         raise HTTPException(status_code=404, detail="Channel not found.")
     return {"status": "success", "data": result}
@@ -123,12 +125,13 @@ async def update_channel(channel_id: str, updates: ChannelUpdate):
 @router.delete("/channels/{channel_id}")
 async def delete_channel(channel_id: str):
     """Remove a monitored channel."""
-    supabase = _get_supabase()
-    success = supabase.delete_channel(channel_id)
+    db = _get_db()
+    success = db.delete_channel(channel_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Channel not found or delete failed.")
+        raise HTTPException(
+            status_code=404, detail="Channel not found or delete failed."
+        )
     return {"status": "success", "message": "Channel deleted."}
-
 
 
 @router.post("/classify")
@@ -170,8 +173,8 @@ async def list_videos(
     offset: int = 0,
 ):
     """List discovered videos with optional filters."""
-    supabase = _get_supabase()
-    data = supabase.list_youtube_videos(
+    db = _get_db()
+    data = db.list_youtube_videos(
         status=status,
         is_technical=is_technical,
         channel_id=channel_id,
@@ -184,26 +187,26 @@ async def list_videos(
 @router.put("/videos/{video_id}")
 async def override_video(video_id: str, override: VideoOverride):
     """Manually approve or reject a video."""
-    supabase = _get_supabase()
+    db = _get_db()
     from datetime import datetime, timezone
 
     updates = {
         "is_technical": override.is_technical,
-        "classification_reason": override.classification_reason or "Manual override",
+        "classification_reason": override.classification_reason
+        or "Manual override",
         "classification_confidence": 1.0,
         "status": "queued" if override.is_technical else "skipped",
         "classified_at": datetime.now(timezone.utc).isoformat(),
     }
-    result = supabase.update_youtube_video(video_id, updates)
+    result = db.update_youtube_video(video_id, updates)
     if result is None:
         raise HTTPException(status_code=404, detail="Video not found.")
     return {"status": "success", "data": result}
 
 
-
 @router.get("/runs")
 async def list_runs(limit: int = 50):
     """List ingestion run history."""
-    supabase = _get_supabase()
-    data = supabase.list_ingestion_runs(limit=limit)
+    db = _get_db()
+    data = db.list_ingestion_runs(limit=limit)
     return {"data": data}

@@ -1,13 +1,12 @@
 import json
 import os
 import re
-from datetime import datetime
 
 import pytest
-
-from app import application, __version__
-from app.transcription import Transcription
 from test_helpers import check_md_file
+
+from app import __version__
+from app.transcription import Transcription
 
 
 def rel_path(path):
@@ -29,7 +28,13 @@ def test_video_with_title():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file=source, title=title, date=date, tags=tags, category=category, speakers=speakers)
+        source_file=source,
+        title=title,
+        date=date,
+        tags=tags,
+        category=category,
+        speakers=speakers,
+    )
     transcripts = transcription.start()
 
     assert os.path.isfile(transcripts[0].outputs["markdown"])
@@ -61,7 +66,13 @@ def test_video_with_all_options():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file=source, title=title, date=date, tags=tags, category=category, speakers=speakers)
+        source_file=source,
+        title=title,
+        date=date,
+        tags=tags,
+        category=category,
+        speakers=speakers,
+    )
     transcripts = transcription.start()
     assert os.path.isfile(transcripts[0].outputs["markdown"])
 
@@ -81,7 +92,7 @@ def test_video_with_all_options():
 
 @pytest.mark.feature
 def test_video_with_chapters():
-    with open(rel_path("testAssets/transcript.txt"), "r") as file:
+    with open(rel_path("testAssets/transcript.txt")) as file:
         result = file.read()
         file.close()
     source = rel_path("testAssets/test_video.mp4")
@@ -96,11 +107,17 @@ def test_video_with_chapters():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file=source, title=title, date=date, tags=tags, category=category, speakers=speakers)
+        source_file=source,
+        title=title,
+        date=date,
+        tags=tags,
+        category=category,
+        speakers=speakers,
+    )
     transcripts = transcription.start(result)
 
     chapter_names = []
-    with open(rel_path("testAssets/test_video_chapters.chapters"), "r") as file:
+    with open(rel_path("testAssets/test_video_chapters.chapters")) as file:
         result = file.read()
         for x in result.split("\n"):
             if re.search(r"CHAPTER\d\dNAME", x):
@@ -125,7 +142,7 @@ def test_video_with_chapters():
 
 @pytest.mark.feature
 def test_generate_payload():
-    with open(rel_path("testAssets/transcript.txt"), "r") as file:
+    with open(rel_path("testAssets/transcript.txt")) as file:
         transcript = file.read()
         file.close()
 
@@ -142,23 +159,28 @@ def test_generate_payload():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file=source, loc=loc, title=title, date=date, tags=tags, category=category, speakers=speakers)
+        source_file=source,
+        loc=loc,
+        title=title,
+        date=date,
+        tags=tags,
+        category=category,
+        speakers=speakers,
+    )
     transcription.start(test_transcript=transcript)
     transcript_json = transcription.transcripts[0].to_json()
     transcript_json["transcript_by"] = f"{username} via tstbtc v{__version__}"
-    payload = {
-        "content": transcript_json
-    }
+    payload = {"content": transcript_json}
     transcription.clean_up()
-    with open(rel_path("testAssets/payload.json"), "r") as outfile:
+    with open(rel_path("testAssets/payload.json")) as outfile:
         content = json.load(outfile)
         outfile.close()
 
     # assert payload == content
     assert list(content.keys()) == list(payload.keys())
-    for k in content.keys():
+    for k in content:
         if k == "content":
-            for key in content[k].keys():
+            for key in content[k]:
                 if key == "loc":
                     assert payload[k][key][-9:] == content[k][key][-9:]
                 elif key == "media":

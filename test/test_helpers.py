@@ -1,5 +1,7 @@
 import yaml
+
 from app import application
+
 
 def check_md_file(
     path,
@@ -7,15 +9,15 @@ def check_md_file(
     media,
     title=None,
     date=None,
-    tags=[],
-    categories=[],
-    speakers=[],
+    tags=None,
+    categories=None,
+    speakers=None,
     local=False,
     chapters=None,
 ):
     """
     Check if the markdown file at the given path contains the expected metadata and content.
-    
+
     :param path: Path to the markdown file
     :param transcript_by: Expected transcriber
     :param media: Expected media link
@@ -28,10 +30,16 @@ def check_md_file(
     :param chapters: Expected chapters (list)
     :return: True if all checks pass, raises AssertionError otherwise
     """
+    if speakers is None:
+        speakers = []
+    if categories is None:
+        categories = []
+    if tags is None:
+        tags = []
     if not path:
         raise ValueError("No path provided")
 
-    with open(path, "r") as file:
+    with open(path) as file:
         contents = file.read()
 
     # Split the content into metadata and body
@@ -46,7 +54,10 @@ def check_md_file(
     fields = yaml.safe_load(yaml_content)
 
     # Check fields
-    assert fields["transcript_by"] == f"{transcript_by} via tstbtc v{application.__version__}", "Incorrect transcript_by field"
+    assert (
+        fields["transcript_by"]
+        == f"{transcript_by} via tstbtc v{application.__version__}"
+    ), "Incorrect transcript_by field"
 
     if not local:
         assert fields.get("media") == media
@@ -55,19 +66,21 @@ def check_md_file(
 
     if date:
         assert fields.get("date") == date
-    
+
     if tags:
         assert set(fields.get("tags", [])) == set(tags)
-    
+
     if speakers:
         assert set(fields.get("speakers", [])) == set(speakers)
-    
+
     if categories:
         assert set(fields.get("categories", [])) == set(categories)
 
     # Check chapters
     if chapters:
-        detected_chapters = [x[3:].strip() for x in body.split("\n") if x.startswith("##")]
+        detected_chapters = [
+            x[3:].strip() for x in body.split("\n") if x.startswith("##")
+        ]
         assert detected_chapters == chapters
 
     return True

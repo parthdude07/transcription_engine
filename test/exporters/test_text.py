@@ -1,4 +1,5 @@
 import os
+
 import pytest
 
 from app.exporters import TextExporter
@@ -18,7 +19,7 @@ class TestTextExporter:
         assert os.path.exists(result)
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = f.read()
 
         # Check for transcript content
@@ -44,7 +45,7 @@ class TestTextExporter:
         assert filename.endswith(".txt")
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = f.read()
 
         # Check for transcript content
@@ -82,6 +83,6 @@ class TestTextExporter:
         assert os.path.dirname(result) == os.path.abspath(expected_dir)
 
         # Verify file content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = f.read()
         assert content == mock_transcript.outputs["raw"]

@@ -4,7 +4,26 @@
       "WebSearch",
       "WebFetch(domain:waves-docs.smallest.ai)",
       "Bash(python:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(wc -l /mnt/z/March_26/bitcoin_project/transcription_engine/app/**/*.py | tail -20)",
+      "Bash(curl -X POST http://localhost:8000/transcription/add_to_queue/ -F \"source=https://www.youtube.com/watch?v=OJLxta79JUM\" -F \"loc=misc\" -F \"deepgram=true\" -F \"diarize=true\" -F \"markdown=true\" -F \"username=test-user\")",
+      "Bash(curl -X POST http://localhost:8000/transcription/start/)",
+      "Bash(curl -X POST http://localhost:8000/transcription/add_to_queue/ -F \"source=https://www.youtube.com/watch?v=N6vOLQ3qJiA\" -F \"loc=misc\" -F \"deepgram=true\" -F \"diarize=true\" -F \"markdown=true\" -F \"username=test-user\")",
+      "Bash(curl http://localhost:8000/health)",
+      "Bash(find:*)",
+      "WebFetch(domain:www.youtube.com)",
+      "Bash(ls /z/March_26/bitcoin_project/transcription_engine/app/services/*.py)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(xargs grep:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(uv pip:*)",
+      "Bash(aws secretsmanager get-secret-value:*)",
+      "Bash(aws rds modify-db-instance:*)",
+      "Bash(aws ec2 authorize-security-group-ingress:*)",
+      "Bash(./venv/Scripts/pip install:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)"
     ]
   }
 }

@@ -1,4 +1,4 @@
-from .whisper import Whisper
-from .deepgram import Deepgram
-from .smallestai import SmallestAI
-from .metadata_extractor import MetadataExtractorService
+from .deepgram import Deepgram  # noqa: F401
+from .metadata_extractor import MetadataExtractorService  # noqa: F401
+from .smallestai import SmallestAI  # noqa: F401
+from .whisper import Whisper  # noqa: F401

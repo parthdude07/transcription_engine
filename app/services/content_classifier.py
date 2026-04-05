@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.logging import get_logger
-from app.services.supabase_service import get_supabase_service
+from app.services.database_service import get_database_service
+
 
 logger = get_logger()
 
@@ -12,7 +13,7 @@ class ContentClassifier:
     """Classifies pending YouTube videos as technical or non-technical."""
 
     def __init__(self):
-        self._supabase = get_supabase_service()
+        self._db = get_database_service()
         self.model = settings.config.get(
             "classification_model", "gemini-2.0-flash"
         )
@@ -32,7 +33,7 @@ class ContentClassifier:
         Returns:
             Summary dict with counts.
         """
-        videos = self._supabase.get_videos_by_status("pending", limit=500)
+        videos = self._db.get_videos_by_status("pending", limit=500)
         if not videos:
             logger.info("No pending videos to classify.")
             return {
@@ -42,9 +43,9 @@ class ContentClassifier:
                 "errors": [],
             }
 
-        run = self._supabase.create_ingestion_run(
+        run = self._db.create_ingestion_run(
             run_type="classify",
-            started_at=datetime.now(timezone.utc).isoformat(),
+            started_at=datetime.now(timezone.utc),
         )
         run_id = run["id"] if run else None
 
@@ -65,13 +66,13 @@ class ContentClassifier:
                 errors.append(error_msg)
 
         if run_id:
-            self._supabase.complete_ingestion_run(
+            self._db.complete_ingestion_run(
                 run_id,
                 videos_classified=classified,
                 videos_approved=approved,
                 videos_rejected=rejected,
                 errors=errors,
-                completed_at=datetime.now(timezone.utc).isoformat(),
+                completed_at=datetime.now(timezone.utc),
             )
 
         logger.info(
@@ -87,7 +88,7 @@ class ContentClassifier:
 
     def classify_video_by_id(self, video_db_id: str) -> dict:
         """Classify a single video by its database UUID."""
-        video = self._supabase.get_video_by_id(video_db_id)
+        video = self._db.get_video_by_id(video_db_id)
         if not video:
             raise ValueError(f"Video not found: {video_db_id}")
 
@@ -138,7 +139,10 @@ class ContentClassifier:
         result = self._call_llm(prompt)
 
         # Determine status based on classification
-        if result["is_technical"] and result["confidence"] >= self.confidence_threshold:
+        if (
+            result["is_technical"]
+            and result["confidence"] >= self.confidence_threshold
+        ):
             status = "queued"
         elif not result["is_technical"]:
             status = "skipped"
@@ -156,14 +160,14 @@ class ContentClassifier:
 
     def _save_classification(self, video_id: str, result: dict, status: str):
         """Persist classification result to the database."""
-        self._supabase.update_youtube_video(
+        self._db.update_youtube_video(
             video_id,
             {
                 "is_technical": result["is_technical"],
                 "classification_reason": result["reason"],
                 "classification_confidence": result["confidence"],
                 "status": status,
-                "classified_at": datetime.now(timezone.utc).isoformat(),
+                "classified_at": datetime.now(timezone.utc),
             },
         )
 
@@ -172,7 +176,8 @@ class ContentClassifier:
     ) -> str:
         """Build the classification prompt."""
         desc_truncated = (
-            description[:1000] if description and len(description) > 1000
+            description[:1000]
+            if description and len(description) > 1000
             else (description or "")
         )
         tags_str = ", ".join(tags[:20]) if tags else "None"
@@ -234,7 +239,9 @@ class ContentClassifier:
 
             # Strip markdown code fences
             if "```" in text:
-                match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+                match = re.search(
+                    r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL
+                )
                 if match:
                     text = match.group(1).strip()
 
@@ -249,7 +256,9 @@ class ContentClassifier:
             is_technical = bool(result.get("is_technical", False))
             confidence = float(result.get("confidence", 0.5))
             confidence = max(0.0, min(1.0, confidence))
-            reason = str(result.get("reason", "")).strip() or "No reason provided"
+            reason = (
+                str(result.get("reason", "")).strip() or "No reason provided"
+            )
 
             return {
                 "is_technical": is_technical,

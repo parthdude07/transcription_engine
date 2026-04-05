@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 import pytest
 
 from app.exporters import JsonExporter
@@ -23,7 +24,7 @@ class TestJsonExporter:
         assert os.path.exists(result)
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = json.load(f)
 
         # Check for transcript data
@@ -50,7 +51,7 @@ class TestJsonExporter:
         assert os.path.exists(result)
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = json.load(f)
 
         # Check for transcript data
@@ -65,7 +66,7 @@ class TestJsonExporter:
         )
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = json.load(f)
 
         # Check for required fields from transcript.to_json()

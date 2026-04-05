@@ -1,5 +1,4 @@
 import os
-import shutil
 
 import pytest
 
@@ -25,9 +24,11 @@ def test_download_audio_file():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file="https://dcs.megaphone.fm/FPMN6776580946.mp3", title="test")
+        source_file="https://dcs.megaphone.fm/FPMN6776580946.mp3", title="test"
+    )
     audio_file, tmp_dir = transcription.transcripts[0].process_source(
-        transcription.tmp_dir)
+        transcription.tmp_dir
+    )
     assert os.path.isfile(audio_file)
     application.clean_up(tmp_dir)
 
@@ -39,9 +40,11 @@ def test_download_video_file():
         test_mode=True,
     )
     transcription.add_transcription_source(
-        source_file="https://www.youtube.com/watch?v=B0HW_sJ503Y", title="test")
+        source_file="https://www.youtube.com/watch?v=B0HW_sJ503Y", title="test"
+    )
     audio_file, tmp_dir = transcription.transcripts[0].process_source(
-        transcription.tmp_dir)
+        transcription.tmp_dir
+    )
     assert os.path.isfile(f"{tmp_dir}/videoFile.mp4")  # video download
     assert os.path.isfile(audio_file)  # mp3 convert
     application.clean_up(tmp_dir)

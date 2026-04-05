@@ -1,14 +1,15 @@
-from abc import ABC, abstractmethod
-import os
 import json
-import yaml
-from typing import Dict, Any, Literal, Union
+import os
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from typing import Any, Literal, Union
 
+import yaml
+
+from app import __version__
 from app.logging import get_logger
 from app.transcript import Transcript
 from app.utils import slugify
-from app import __version__
 
 
 class TranscriptExporter(ABC):
@@ -102,7 +103,7 @@ class TranscriptExporter(ABC):
         return os.path.join(directory, f"{filename}.{file_type}")
 
     def write_to_file(
-        self, content: Union[str, Dict[str, Any]], file_path: str
+        self, content: Union[str, dict[str, Any]], file_path: str
     ) -> str:
         """
         Write content to a file based on file extension.
@@ -218,18 +219,22 @@ class MarkdownExporter(TranscriptExporter):
 
         # Determine which content to use
         content_key = kwargs.get("content_key", "corrected_text")
-        content = transcript.outputs.get(content_key, transcript.outputs.get("raw"))
+        content = transcript.outputs.get(
+            content_key, transcript.outputs.get("raw")
+        )
 
         if content is None:
-            raise Exception(f"No transcript content found for key '{content_key}' or 'raw'")
+            raise Exception(
+                f"No transcript content found for key '{content_key}' or 'raw'"
+            )
 
         # Add or modify specific fields
         if self.transcript_by:
             review_flag = kwargs.get("review_flag", "")
             version = kwargs.get("version", __version__)
-            metadata[
-                "transcript_by"
-            ] = f"{self.transcript_by} via tstbtc v{version}{review_flag}"
+            metadata["transcript_by"] = (
+                f"{self.transcript_by} via tstbtc v{version}{review_flag}"
+            )
 
         # List of fields to exclude from the markdown metadata
         excluded_fields = ["type", "loc", "chapters", "description"]
@@ -289,9 +294,9 @@ class JsonExporter(TranscriptExporter):
         # Add attribution if provided
         if self.transcript_by:
             version = kwargs.get("version", __version__)
-            transcript_json[
-                "transcript_by"
-            ] = f"{self.transcript_by} via tstbtc v{version}"
+            transcript_json["transcript_by"] = (
+                f"{self.transcript_by} via tstbtc v{version}"
+            )
 
         # Construct file path
         file_path = self.construct_file_path(
@@ -366,8 +371,8 @@ class ExporterFactory:
 
     @staticmethod
     def create_exporters(
-        config: Dict[str, Any], transcript_by: str = None
-    ) -> Dict[str, TranscriptExporter]:
+        config: dict[str, Any], transcript_by: str = None
+    ) -> dict[str, TranscriptExporter]:
         """
         Create exporters based on the provided configuration.
 
@@ -390,9 +395,7 @@ class ExporterFactory:
 
         # Create text exporter if needed
         if config.get("text_output", False):
-            exporters["text"] = TextExporter(
-                output_dir=output_dir
-            )
+            exporters["text"] = TextExporter(output_dir=output_dir)
 
         # Create JSON exporter if needed
         if config.get("json", True):

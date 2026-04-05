@@ -1,8 +1,8 @@
-import pytest
 from unittest import mock
 
+import pytest
+
 from app.transcription import Transcription
-from app.exporters import MarkdownExporter, JsonExporter, TextExporter
 
 
 @pytest.mark.integration
@@ -134,7 +134,10 @@ class TestTranscriptionWithExporters:
         assert text_exporter.export.call_args[1]["add_timestamp"] is False
 
     def test_export_with_json(
-        self, transcription_with_exporters, mock_transcript, mock_transcription_deps
+        self,
+        transcription_with_exporters,
+        mock_transcript,
+        mock_transcription_deps,
     ):
         """Test export with JSON output"""
         # Get the mock exporters
@@ -212,7 +215,7 @@ class TestTranscriptionWithExporters:
 
         # Clear the mock transcript's outputs and add back the raw output
         mock_transcript.outputs.clear()
-        mock_transcript.outputs['raw'] = 'test transcript'
+        mock_transcript.outputs["raw"] = "test transcript"
 
         # Mock write_to_markdown_file
         transcription.write_to_markdown_file = mock.MagicMock()

@@ -1,19 +1,16 @@
-import json
 import logging
 import traceback
-import os
+
 import click
 
 from app import __app_name__, __version__, commands, utils
 from app.api_client import APIClient
-from app.commands.cli_utils import (
-    get_transcription_url, 
-    auto_start_server
-)
+from app.commands.cli_utils import auto_start_server, get_transcription_url
 from app.config import settings
 from app.data_writer import DataWriter
 from app.logging import configure_logger, get_logger
 from app.transcription import Transcription
+
 
 logger = get_logger()
 
@@ -62,7 +59,7 @@ def cli(ctx, auto_server, server_mode, server_verbose):
     ctx.obj = {
         "auto_server": auto_server,
         "server_mode": server_mode,
-        "server_verbose": server_verbose
+        "server_verbose": server_verbose,
     }
     pass
 
@@ -459,15 +456,7 @@ def preprocess(
 
 @cli.command()
 @click.argument(
-    "service",
-    nargs=1,
-    type=click.Choice(
-        [
-            "whisper",
-            "deepgram",
-            "smallestai"
-        ]
-    )
+    "service", nargs=1, type=click.Choice(["whisper", "deepgram", "smallestai"])
 )
 @click.argument("metadata_json_file", nargs=1)
 # Options for configuring the transcription postprocess
@@ -508,11 +497,13 @@ def postprocess(
             needs_review=needs_review,
         )
         logger.info(
-            f"Postprocessing {service} transcript from {metadata_json_file}")
-        with open(metadata_json_file, "r") as outfile:
+            f"Postprocessing {service} transcript from {metadata_json_file}"
+        )
+        with open(metadata_json_file) as outfile:
             metadata_json = json.load(outfile)
         metadata = utils.configure_metadata_given_from_JSON(
-            metadata_json, from_json=metadata_json_file)
+            metadata_json, from_json=metadata_json_file
+        )
         transcription.add_transcription_source(
             source_file=metadata["source_file"],
             loc=metadata["loc"],
@@ -529,7 +520,7 @@ def postprocess(
             link=metadata["media"],
             preprocess=False,
             nocheck=True,
-            cutoff_date=metadata["cutoff_date"]
+            cutoff_date=metadata["cutoff_date"],
         )
         # Finalize transcription service output
         transcript = transcription.transcripts[0]
@@ -537,15 +528,25 @@ def postprocess(
             logger.info("Combining deepgram chunk outputs...")
             all_chunks_output = []
             for chunk_file in metadata["deepgram_chunks"]:
-                with open(chunk_file, "r") as chunk:
+                with open(chunk_file) as chunk:
                     all_chunks_output.append(json.load(chunk))
-            overlap_between_chunks = 30.0  # or any other value used during splitting
-            transcription_service_output = transcription.service.combine_chunk_outputs(
-                all_chunks_output, overlap=overlap_between_chunks)
-            transcript.outputs["transcription_service_output_file"] = transcription.service.write_to_json_file(
-                transcription_service_output, transcript)
+            overlap_between_chunks = (
+                30.0  # or any other value used during splitting
+            )
+            transcription_service_output = (
+                transcription.service.combine_chunk_outputs(
+                    all_chunks_output, overlap=overlap_between_chunks
+                )
+            )
+            transcript.outputs["transcription_service_output_file"] = (
+                transcription.service.write_to_json_file(
+                    transcription_service_output, transcript
+                )
+            )
         else:
-            transcript.outputs["transcription_service_output_file"] = metadata[f"{service}_output"]
+            transcript.outputs["transcription_service_output_file"] = metadata[
+                f"{service}_output"
+            ]
 
         transcription.service.finalize_transcript(transcript)
         transcription.postprocess(transcript)

@@ -1,12 +1,14 @@
 import sys
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
 from app.config import settings
 from app.data_fetcher import DataFetcher
 from app.logging import get_logger
 from app.types import TranscriptionCoverage
+
 
 logger = get_logger()
 router = APIRouter(tags=["Curator"])
@@ -18,9 +20,11 @@ except HTTPException as e:
     logger.error(f"Failed to initialize server: {e.detail}")
     sys.exit(1)
 
+
 class GetSourcesRequest(BaseModel):
-    loc: str = 'all'
-    coverage: Optional[TranscriptionCoverage] = 'none'
+    loc: str = "all"
+    coverage: Optional[TranscriptionCoverage] = "none"
+
 
 @router.post("/get_sources/")
 async def get_sources(request: GetSourcesRequest):
@@ -30,6 +34,7 @@ async def get_sources(request: GetSourcesRequest):
     except Exception as e:
         logger.error(e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/get_transcription_backlog/")
 async def get_transcription_backlog():

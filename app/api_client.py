@@ -1,9 +1,12 @@
 import functools
+
 import requests
 
 from app.logging import get_logger
 
+
 logger = get_logger()
+
 
 def api_error_handler(func):
     @functools.wraps(func)
@@ -16,16 +19,21 @@ def api_error_handler(func):
             logger.error(f"API request failed: {e}")
             if e.response is not None:
                 try:
-                    error_detail = e.response.json().get('detail', 'No detail provided')
+                    error_detail = e.response.json().get(
+                        "detail", "No detail provided"
+                    )
                     logger.error(f"Error detail: {error_detail}")
                 except ValueError:
-                    logger.error(f"Error response was not JSON. Content: {e.response.text}")
+                    logger.error(
+                        f"Error response was not JSON. Content: {e.response.text}"
+                    )
             else:
                 logger.error("No response received from server")
             raise
         except Exception as e:
             logger.error(f"An unexpected error occurred: {e}")
             raise
+
     return wrapper
 
 
@@ -37,6 +45,7 @@ class APIClient:
     It handles the construction of API endpointsand applies error handling
     to all requests.
     """
+
     def __init__(self, base_url):
         self.base_url = base_url
 
@@ -45,10 +54,16 @@ class APIClient:
         if source.endswith(".json"):
             with open(source, "rb") as f:
                 files = {"source_file": (source, f, "application/json")}
-                return requests.post(f"{self.base_url}/transcription/add_to_queue/", data=data, files=files)
+                return requests.post(
+                    f"{self.base_url}/transcription/add_to_queue/",
+                    data=data,
+                    files=files,
+                )
         else:
             data["source"] = source
-            return requests.post(f"{self.base_url}/transcription/add_to_queue/", data=data)
+            return requests.post(
+                f"{self.base_url}/transcription/add_to_queue/", data=data
+            )
 
     @api_error_handler
     def start_transcription(self):
@@ -59,10 +74,16 @@ class APIClient:
         if source.endswith(".json"):
             with open(source, "rb") as f:
                 files = {"source_file": (source, f, "application/json")}
-                return requests.post(f"{self.base_url}/transcription/preprocess/", data=data, files=files)
+                return requests.post(
+                    f"{self.base_url}/transcription/preprocess/",
+                    data=data,
+                    files=files,
+                )
         else:
             data["source"] = source
-            return requests.post(f"{self.base_url}/transcription/preprocess/", data=data)
+            return requests.post(
+                f"{self.base_url}/transcription/preprocess/", data=data
+            )
 
     @api_error_handler
     def get_queue(self):

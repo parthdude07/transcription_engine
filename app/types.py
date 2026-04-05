@@ -1,9 +1,4 @@
-from typing import (
-    Literal,
-    TypedDict,
-    Optional,
-    Union
-)
+from typing import Literal, Optional, TypedDict, Union
 
 
 TranscriptionCoverage = Optional[Literal["full", "none"]]
@@ -56,6 +51,7 @@ class SpeakerSegmentWithSentences(TypedDict):
     start: float
     end: float
     sentences: list[Sentence]
+
 
 # format required by
 # https://github.com/pietrop/slate-transcript-editor

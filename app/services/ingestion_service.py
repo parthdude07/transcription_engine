@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from app.logging import get_logger
 from app.services.channel_scanner import ChannelScanner
 from app.services.content_classifier import ContentClassifier
-from app.services.supabase_service import get_supabase_service
+from app.services.database_service import get_database_service
+
 
 logger = get_logger()
 
@@ -12,7 +11,7 @@ class IngestionService:
     """Orchestrates the full ingestion pipeline."""
 
     def __init__(self):
-        self._supabase = get_supabase_service()
+        self._db = get_database_service()
 
     def run_full_pipeline(self) -> dict:
         """Execute the full pipeline: scan → classify → queue approved videos.
@@ -58,7 +57,9 @@ class IngestionService:
             + queue_result.get("errors", [])
         )
         if all_errors:
-            logger.warning(f"Pipeline completed with {len(all_errors)} error(s).")
+            logger.warning(
+                f"Pipeline completed with {len(all_errors)} error(s)."
+            )
 
         logger.info("Full ingestion pipeline complete.")
         return summary
@@ -75,7 +76,7 @@ class IngestionService:
         Returns:
             Summary dict with counts and errors.
         """
-        videos = self._supabase.get_videos_by_status("queued", limit=limit)
+        videos = self._db.get_videos_by_status("queued", limit=limit)
         if not videos:
             logger.info("No approved videos to queue for transcription.")
             return {"videos_queued": 0, "errors": []}
@@ -88,9 +89,7 @@ class IngestionService:
                 self._submit_to_pipeline(video)
                 queued += 1
             except Exception as e:
-                error_msg = (
-                    f"Failed to queue '{video.get('title', video['video_id'])}': {e}"
-                )
+                error_msg = f"Failed to queue '{video.get('title', video['video_id'])}': {e}"
                 logger.error(error_msg)
                 errors.append(error_msg)
 
@@ -109,9 +108,12 @@ class IngestionService:
         channel_category = channel_info.get("category", "misc")
 
         import requests
+
         from app.config import settings
 
-        server_url = settings.TRANSCRIPTION_SERVER_URL or "http://localhost:8000"
+        server_url = (
+            settings.TRANSCRIPTION_SERVER_URL or "http://localhost:8000"
+        )
 
         data = {
             "source": youtube_url,
@@ -129,7 +131,7 @@ class IngestionService:
         response.raise_for_status()
 
         # Update video status
-        self._supabase.update_youtube_video(
+        self._db.update_youtube_video(
             video["id"],
             {"status": "transcribed"},
         )

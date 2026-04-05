@@ -3,22 +3,22 @@ import tempfile
 
 import yt_dlp
 
+from app import __version__, application, services, utils
 from app.config import settings
+from app.data_fetcher import DataFetcher
+from app.data_writer import DataWriter
 from app.exceptions import DuplicateSourceError
+from app.exporters import ExporterFactory, TranscriptExporter
+from app.github_api_handler import GitHubAPIHandler
+from app.logging import get_logger
+from app.services.correction import CorrectionService
+from app.services.database_service import get_database_service
+from app.services.global_tag_manager import GlobalTagManager
+from app.services.metadata_extractor import MetadataExtractorService
+from app.services.summarizer import SummarizerService
 
 # from app.metadata_parser import MetadataParser
-from app.transcript import Transcript, Source, Audio, Video, Playlist, RSS
-from app import __app_name__, __version__, application, services, utils
-from app.logging import get_logger
-from app.data_writer import DataWriter
-from app.data_fetcher import DataFetcher
-from app.github_api_handler import GitHubAPIHandler
-from app.exporters import ExporterFactory, TranscriptExporter
-from app.services.correction import CorrectionService
-from app.services.summarizer import SummarizerService
-from app.services.global_tag_manager import GlobalTagManager
-from app.services.supabase_service import get_supabase_service
-from app.services.metadata_extractor import MetadataExtractorService
+from app.transcript import RSS, Audio, Playlist, Source, Transcript, Video
 
 
 class Transcription:
@@ -62,20 +62,22 @@ class Transcription:
         self.metadata_writer = DataWriter(
             self.__configure_tstbtc_metadata_dir()
         )
-        
-        # Initialize global tag manager
-        self.tag_manager = GlobalTagManager(self.__configure_tstbtc_metadata_dir())
 
-        self.exporters: dict[
-            str, TranscriptExporter
-        ] = ExporterFactory.create_exporters(
-            config={
-                "markdown": self.markdown,
-                "text_output": text_output,
-                "json": json,
-                "model_output_dir": model_output_dir,
-            },
-            transcript_by=self.transcript_by,
+        # Initialize global tag manager
+        self.tag_manager = GlobalTagManager(
+            self.__configure_tstbtc_metadata_dir()
+        )
+
+        self.exporters: dict[str, TranscriptExporter] = (
+            ExporterFactory.create_exporters(
+                config={
+                    "markdown": self.markdown,
+                    "text_output": text_output,
+                    "json": json,
+                    "model_output_dir": model_output_dir,
+                },
+                transcript_by=self.transcript_by,
+            )
         )
 
         self.model_output_dir = model_output_dir
@@ -90,9 +92,17 @@ class Transcription:
         if not test_mode:
             self.processing_services.append(MetadataExtractorService())
         if correct:
-            self.processing_services.append(CorrectionService(provider=llm_provider, model=llm_correction_model))
+            self.processing_services.append(
+                CorrectionService(
+                    provider=llm_provider, model=llm_correction_model
+                )
+            )
         if summarize:
-            self.processing_services.append(SummarizerService(provider=llm_provider, model=llm_summary_model))
+            self.processing_services.append(
+                SummarizerService(
+                    provider=llm_provider, model=llm_summary_model
+                )
+            )
 
         if deepgram:
             self.service = services.Deepgram(
@@ -184,7 +194,9 @@ class Transcription:
                 raise Exception(f"Invalid source: {e}")
 
         try:
-            if source.source_file.lower().endswith((".mp3", ".wav", ".m4a", ".aac")):
+            if source.source_file.lower().endswith(
+                (".mp3", ".wav", ".m4a", ".aac")
+            ):
                 return Audio(source=source, chapters=chapters)
             if source.source_file.endswith(("rss", ".xml")):
                 return RSS(source=source)
@@ -231,14 +243,16 @@ class Transcription:
             test_mode=self.test_mode,
             metadata_file=metadata_file,
         )
-        
+
         # Update global tag dictionary with new transcript metadata
         try:
             self.tag_manager.update_from_transcript(transcript)
-            self.logger.debug(f"Updated global tag dictionary with transcript: {source.title}")
+            self.logger.debug(
+                f"Updated global tag dictionary with transcript: {source.title}"
+            )
         except Exception as e:
             self.logger.warning(f"Failed to update global tag dictionary: {e}")
-        
+
         self.transcripts.append(transcript)
 
     def add_transcription_source(
@@ -249,20 +263,32 @@ class Transcription:
         date=None,
         summary=None,
         episode=None,
-        additional_resources=[],
+        additional_resources=None,
         # cutoff_date serves as a threshold, and only content published beyond this point is relevant
         cutoff_date=None,
-        tags=[],
-        category=[],
-        speakers=[],
+        tags=None,
+        category=None,
+        speakers=None,
         preprocess=True,
         youtube_metadata=None,
         link=None,
-        chapters=[],
+        chapters=None,
         nocheck=False,
-        excluded_media=[],
+        excluded_media=None,
     ):
         """Add a source for transcription"""
+        if excluded_media is None:
+            excluded_media = []
+        if chapters is None:
+            chapters = []
+        if speakers is None:
+            speakers = []
+        if category is None:
+            category = []
+        if tags is None:
+            tags = []
+        if additional_resources is None:
+            additional_resources = []
         if cutoff_date:
             cutoff_date = utils.validate_and_parse_date(cutoff_date)
             # Even with a cutoff date, for YouTube playlists we still need to download the metadata
@@ -429,7 +455,6 @@ class Transcription:
         try:
             for transcript in self.transcripts:
                 transcript.status = "in_progress"
-                output_dir = f"{self.model_output_dir}/{transcript.source.loc}"
                 self.logger.info(
                     f"Processing source: {transcript.source.source_file}"
                 )
@@ -463,10 +488,14 @@ class Transcription:
 
         markdown_exporter = self.exporters.get("markdown")
         if not markdown_exporter:
-            self.logger.error("Markdown exporter not configured, cannot push to GitHub.")
+            self.logger.error(
+                "Markdown exporter not configured, cannot push to GitHub."
+            )
             return
 
-        pr_url_transcripts = self.github_handler.push_transcripts(transcripts, markdown_exporter)
+        pr_url_transcripts = self.github_handler.push_transcripts(
+            transcripts, markdown_exporter
+        )
         if pr_url_transcripts:
             self.logger.info(
                 f"transcripts: Pull request created: {pr_url_transcripts}"
@@ -523,11 +552,26 @@ class Transcription:
         if text_exporter:
             # Save raw, corrected, and summary files
             if transcript.outputs.get("raw"):
-                text_exporter.export(transcript, add_timestamp=False, content_key="raw", suffix="_raw")
+                text_exporter.export(
+                    transcript,
+                    add_timestamp=False,
+                    content_key="raw",
+                    suffix="_raw",
+                )
             if transcript.outputs.get("corrected_text"):
-                text_exporter.export(transcript, add_timestamp=False, content_key="corrected_text", suffix="_corrected")
+                text_exporter.export(
+                    transcript,
+                    add_timestamp=False,
+                    content_key="corrected_text",
+                    suffix="_corrected",
+                )
             if transcript.summary:
-                text_exporter.export(transcript, add_timestamp=False, content_key="summary", suffix="_summary")
+                text_exporter.export(
+                    transcript,
+                    add_timestamp=False,
+                    content_key="summary",
+                    suffix="_summary",
+                )
 
         if self.markdown or self.github_handler:
             transcript.outputs["markdown"] = self.write_to_markdown_file(
@@ -539,10 +583,10 @@ class Transcription:
                 transcript
             )
 
-        # Save to Supabase if configured
-        supabase = get_supabase_service()
-        if supabase.is_available:
-            supabase.save_from_transcript_object(transcript)
+        # Save to database if configured
+        db = get_database_service()
+        if db.is_available:
+            db.save_from_transcript_object(transcript)
 
     def clean_up(self):
         self.logger.debug("Cleaning up...")

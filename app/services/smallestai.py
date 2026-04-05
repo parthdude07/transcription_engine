@@ -11,6 +11,7 @@ from app.logging import get_logger
 from app.media_processor import MediaProcessor
 from app.transcript import Transcript
 
+
 logger = get_logger()
 
 API_URL = "https://waves-api.smallest.ai/api/v1/pulse/get_text"
@@ -88,9 +89,13 @@ class SmallestAI:
                 "try enabling chunked transcription."
             )
         except Exception as e:
-            raise Exception(f"(smallestai) Error transcribing audio to text: {e}")
+            raise Exception(
+                f"(smallestai) Error transcribing audio to text: {e}"
+            )
 
-    def write_to_json_file(self, transcription_service_output, transcript: Transcript):
+    def write_to_json_file(
+        self, transcription_service_output, transcript: Transcript
+    ):
         """Save raw API response to JSON file."""
         try:
             output_file = self.data_writer.write_json(
@@ -101,7 +106,7 @@ class SmallestAI:
             logger.info(f"(smallestai) Model output stored at: {output_file}")
 
             if transcript.metadata_file is not None:
-                with open(transcript.metadata_file, "r") as file:
+                with open(transcript.metadata_file) as file:
                     data = json.load(file)
                 data["smallestai_output"] = os.path.basename(output_file)
                 with open(transcript.metadata_file, "w") as file:
@@ -157,7 +162,9 @@ class SmallestAI:
         for utt in utterances:
             speaker_raw = utt.get("speaker", "speaker_0")
             # Normalize speaker ID: "speaker_0" → 0
-            if isinstance(speaker_raw, str) and speaker_raw.startswith("speaker_"):
+            if isinstance(speaker_raw, str) and speaker_raw.startswith(
+                "speaker_"
+            ):
                 speaker_id = int(speaker_raw.split("_")[-1])
             elif isinstance(speaker_raw, int):
                 speaker_id = speaker_raw
@@ -253,7 +260,9 @@ class SmallestAI:
         except Exception as e:
             raise Exception(f"(smallestai) Error creating output format: {e}")
 
-    def generate_srt(self, transcription_service_output, transcript: Transcript):
+    def generate_srt(
+        self, transcription_service_output, transcript: Transcript
+    ):
         """Generate SRT subtitle file from utterances/words."""
 
         def format_time(seconds):
@@ -310,7 +319,7 @@ class SmallestAI:
                 raise Exception("No 'smallestai_output' found")
 
             with open(
-                transcript.outputs["transcription_service_output_file"], "r"
+                transcript.outputs["transcription_service_output_file"]
             ) as f:
                 transcription_service_output = json.load(f)
 
@@ -363,7 +372,9 @@ class SmallestAI:
             # Skip overlapping portion for non-first chunks
             if chunk_index > 0 and utterances:
                 overlap_cutoff = total_offset + overlap
-                utterances = [u for u in utterances if u["end"] >= overlap_cutoff]
+                utterances = [
+                    u for u in utterances if u["end"] >= overlap_cutoff
+                ]
                 words = [w for w in words if w["end"] >= overlap_cutoff]
 
             combined["transcription"] += " " + transcription
@@ -376,7 +387,9 @@ class SmallestAI:
         combined["transcription"] = combined["transcription"].strip()
 
         # Carry over emotions from last chunk (or merge)
-        last_emotions = all_chunks_output[-1].get("emotions") if all_chunks_output else None
+        last_emotions = (
+            all_chunks_output[-1].get("emotions") if all_chunks_output else None
+        )
         if last_emotions:
             combined["emotions"] = last_emotions
 
@@ -409,7 +422,7 @@ class SmallestAI:
         )
 
         if transcript.metadata_file is not None:
-            with open(transcript.metadata_file, "r") as file:
+            with open(transcript.metadata_file) as file:
                 data = json.load(file)
             data["smallestai_chunks"] = smallestai_chunks
             with open(transcript.metadata_file, "w") as file:
@@ -429,15 +442,19 @@ class SmallestAI:
                     f"Audio is longer than {self.max_audio_length / 60} minutes. "
                     f"Splitting into {self.processor.chunk_length / 60} min chunks."
                 )
-                transcription_service_output = self.transcribe_in_chunks(transcript)
+                transcription_service_output = self.transcribe_in_chunks(
+                    transcript
+                )
             else:
                 transcription_service_output = self.audio_to_text(
                     transcript.audio_file
                 )
 
-            transcript.outputs[
-                "transcription_service_output_file"
-            ] = self.write_to_json_file(transcription_service_output, transcript)
+            transcript.outputs["transcription_service_output_file"] = (
+                self.write_to_json_file(
+                    transcription_service_output, transcript
+                )
+            )
 
             transcript.outputs["srt_file"] = self.generate_srt(
                 transcription_service_output, transcript

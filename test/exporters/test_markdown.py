@@ -1,4 +1,5 @@
 import os
+
 import pytest
 import yaml
 
@@ -25,7 +26,7 @@ class TestMarkdownExporter:
         assert os.path.exists(result)
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = f.read()
 
         # Check for YAML frontmatter
@@ -57,7 +58,7 @@ class TestMarkdownExporter:
         assert "_plain.md" in result
 
         # Read the content
-        with open(result, "r") as f:
+        with open(result) as f:
             content = f.read()
 
         # Check for absence of YAML frontmatter

@@ -1,19 +1,22 @@
 import os
+
 import click
 
-from app.config import settings
 from app.commands.cli_utils import (
+    get_running_server_info,
+    get_transcription_url,
+    is_server_running,
     start_server,
     stop_server,
-    get_running_server_info,
-    is_server_running,
-    get_transcription_url
 )
+from app.config import settings
+
 
 @click.group()
 def server():
     """Manage the transcription server."""
     pass
+
 
 @server.command()
 @click.option(
@@ -36,7 +39,8 @@ def server():
     show_default=True,
 )
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     default=False,
     help="Show server output directly in the console",
@@ -44,6 +48,7 @@ def server():
 def start(mode, host, port, verbose):
     """Start the transcription server."""
     start_server(host=host, port=port, mode=mode, verbose=verbose)
+
 
 @server.command()
 @click.option(
@@ -57,6 +62,7 @@ def stop(mode):
     """Stop the transcription server."""
     stop_server(mode=mode)
 
+
 @server.command()
 @click.option(
     "--mode",
@@ -69,7 +75,7 @@ def status(mode):
     """Check the status of the transcription server."""
     server_info = get_running_server_info(mode)
     url = get_transcription_url()
-    
+
     if server_info:
         click.echo(f"Server is running with PID {server_info['pid']}.")
         click.echo(f"Started at: {server_info['start_time']}")
@@ -77,17 +83,20 @@ def status(mode):
         click.echo(f"Host: {server_info['host']}")
         click.echo(f"Port: {server_info['port']}")
         click.echo(f"Log file: {server_info['log_file']}")
-        
+
         if is_server_running(url):
             click.echo("Server is responding to health checks.")
         else:
-            click.echo("Warning: Server process is running but not responding to health checks.")
+            click.echo(
+                "Warning: Server process is running but not responding to health checks."
+            )
     else:
         click.echo(f"No {mode} server is currently running.")
-        
+
         if is_server_running(url):
             click.echo(f"However, a server is responding at {url}.")
             click.echo("This might be a server started outside of this CLI.")
+
 
 @server.command()
 @click.option(
@@ -98,13 +107,15 @@ def status(mode):
     show_default=True,
 )
 @click.option(
-    "--follow", "-f",
+    "--follow",
+    "-f",
     is_flag=True,
     default=False,
     help="Follow the log output (similar to tail -f)",
 )
 @click.option(
-    "--lines", "-n",
+    "--lines",
+    "-n",
     type=int,
     default=50,
     help="Number of lines to show",
@@ -112,23 +123,25 @@ def status(mode):
 )
 def logs(mode, follow, lines):
     """View the server logs.
-    
+
     This command allows you to view the logs of the server.
     """
     # Get the path to the log file
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    logs_dir = os.path.join(base_dir, 'logs')
-    log_file = os.path.join(logs_dir, f'server_{mode}.log')
-    
+    base_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    logs_dir = os.path.join(base_dir, "logs")
+    log_file = os.path.join(logs_dir, f"server_{mode}.log")
+
     if not os.path.exists(log_file):
         click.echo(f"Log file not found: {log_file}")
         click.echo(f"The server may not have been started in {mode} mode yet.")
         return
-    
+
     if follow:
         # Use the 'tail' command with -f option to follow the log file
         click.echo(f"Following logs from {log_file}. Press Ctrl+C to stop.")
         os.system(f"tail -n {lines} -f {log_file}")
     else:
         # Use the 'tail' command to show the last N lines
-        os.system(f"tail -n {lines} {log_file}") 
+        os.system(f"tail -n {lines} {log_file}")

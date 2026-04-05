@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 import pytest
 
 from app.exporters import TranscriptExporter
@@ -73,7 +74,7 @@ class TestTranscriptExporter:
 
         # Verify
         assert os.path.exists(file_path)
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             assert f.read() == content
         assert result == os.path.abspath(file_path)
 
@@ -88,7 +89,7 @@ class TestTranscriptExporter:
 
         # Verify
         assert os.path.exists(file_path)
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             assert json.load(f) == content
         assert result == os.path.abspath(file_path)
 

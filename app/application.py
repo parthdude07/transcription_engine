@@ -1,13 +1,15 @@
 """This module provides the transcript cli."""
+
 import errno
 import logging
 import shutil
 
 import boto3
 
-from app import __app_name__, __version__
+from app import __app_name__
 from app.config import settings
 from app.logging import get_logger
+
 
 logger = get_logger()
 

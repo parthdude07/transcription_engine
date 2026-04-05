@@ -2,15 +2,14 @@
 Common pytest fixtures for the entire test suite.
 """
 
-import os
-import tempfile
-import pytest
-from unittest import mock
 import shutil
+import tempfile
+from unittest import mock
 
-from app import __version__
-from app.transcript import Transcript, Source
-from app.exporters import MarkdownExporter, JsonExporter, TextExporter
+import pytest
+
+from app.exporters import JsonExporter, MarkdownExporter, TextExporter
+from app.transcript import Source, Transcript
 
 
 # --- Basic Fixtures ---

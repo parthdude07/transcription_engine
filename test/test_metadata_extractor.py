@@ -1,5 +1,7 @@
-import pytest
 from unittest import mock
+
+import pytest
+
 from app.services.metadata_extractor import MetadataExtractorService
 
 
@@ -7,7 +9,9 @@ from app.services.metadata_extractor import MetadataExtractorService
 def mock_transcript():
     """Create a mock transcript with YouTube metadata."""
     transcript = mock.MagicMock()
-    transcript.source.title = "Taproot Activation - Pieter Wuille - Bitcoin 2021"
+    transcript.source.title = (
+        "Taproot Activation - Pieter Wuille - Bitcoin 2021"
+    )
     transcript.source.speakers = []
     transcript.source.conference = None
     transcript.source.topics = []
@@ -50,10 +54,11 @@ def mock_transcript_with_speakers():
 
 
 class TestMetadataExtractorService:
-
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
-    def test_process_extracts_metadata(self, mock_settings, mock_genai, mock_transcript):
+    def test_process_extracts_metadata(
+        self, mock_settings, mock_genai, mock_transcript
+    ):
         """Test that process() correctly extracts and sets metadata."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
@@ -70,11 +75,17 @@ class TestMetadataExtractorService:
 
         assert mock_transcript.source.speakers == ["Pieter Wuille"]
         assert mock_transcript.source.conference == "Bitcoin 2021"
-        assert mock_transcript.source.topics == ["Taproot", "Schnorr Signatures", "Script Upgrades"]
+        assert mock_transcript.source.topics == [
+            "Taproot",
+            "Schnorr Signatures",
+            "Script Upgrades",
+        ]
 
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
-    def test_process_skips_no_youtube(self, mock_settings, mock_genai, mock_transcript_no_youtube):
+    def test_process_skips_no_youtube(
+        self, mock_settings, mock_genai, mock_transcript_no_youtube
+    ):
         """Test that process() skips when no YouTube metadata is present."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
@@ -88,34 +99,40 @@ class TestMetadataExtractorService:
 
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
-    def test_process_preserves_manual_speakers(self, mock_settings, mock_genai, mock_transcript_with_speakers):
+    def test_process_preserves_manual_speakers(
+        self, mock_settings, mock_genai, mock_transcript_with_speakers
+    ):
         """Test that manually-set speakers are NOT overwritten."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
         mock_model_instance = mock.MagicMock()
         mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.return_value.text = (
-            '{"speakers": ["LLM Extracted Speaker"], "conference": "Some Event", "topics": ["Mining"]}'
-        )
+        mock_model_instance.generate_content.return_value.text = '{"speakers": ["LLM Extracted Speaker"], "conference": "Some Event", "topics": ["Mining"]}'
 
         service = MetadataExtractorService()
         service.process(mock_transcript_with_speakers)
 
         # Speakers should NOT be overwritten
-        assert mock_transcript_with_speakers.source.speakers == ["Already Set Speaker"]
+        assert mock_transcript_with_speakers.source.speakers == [
+            "Already Set Speaker"
+        ]
         # But conference and topics should still be set
         assert mock_transcript_with_speakers.source.conference == "Some Event"
         assert mock_transcript_with_speakers.source.topics == ["Mining"]
 
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
-    def test_process_handles_llm_failure(self, mock_settings, mock_genai, mock_transcript):
+    def test_process_handles_llm_failure(
+        self, mock_settings, mock_genai, mock_transcript
+    ):
         """Test that LLM failure leaves existing metadata intact."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
         mock_model_instance = mock.MagicMock()
         mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.side_effect = Exception("API Error")
+        mock_model_instance.generate_content.side_effect = Exception(
+            "API Error"
+        )
 
         service = MetadataExtractorService()
         service.process(mock_transcript)
@@ -127,13 +144,17 @@ class TestMetadataExtractorService:
 
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
-    def test_process_handles_malformed_json(self, mock_settings, mock_genai, mock_transcript):
+    def test_process_handles_malformed_json(
+        self, mock_settings, mock_genai, mock_transcript
+    ):
         """Test graceful handling of malformed LLM JSON response."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
         mock_model_instance = mock.MagicMock()
         mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.return_value.text = "not valid json {{"
+        mock_model_instance.generate_content.return_value.text = (
+            "not valid json {{"
+        )
 
         service = MetadataExtractorService()
         service.process(mock_transcript)
@@ -150,9 +171,9 @@ class TestMetadataExtractorService:
             '{"speakers": ["Alice", "Bob"], "conference": "BTC Conf", "topics": ["Mining"]}'
         )
         assert result == {
-            'speakers': ['Alice', 'Bob'],
-            'conference': 'BTC Conf',
-            'topics': ['Mining']
+            "speakers": ["Alice", "Bob"],
+            "conference": "BTC Conf",
+            "topics": ["Mining"],
         }
 
     def test_parse_response_markdown_wrapped(self):
@@ -162,16 +183,16 @@ class TestMetadataExtractorService:
             '```json\n{"speakers": ["Alice"], "conference": "Event", "topics": ["Taproot"]}\n```'
         )
         assert result == {
-            'speakers': ['Alice'],
-            'conference': 'Event',
-            'topics': ['Taproot']
+            "speakers": ["Alice"],
+            "conference": "Event",
+            "topics": ["Taproot"],
         }
 
     def test_parse_response_invalid_json(self):
         """Test _parse_response with invalid JSON returns empty defaults."""
         service = MetadataExtractorService.__new__(MetadataExtractorService)
         result = service._parse_response("this is not json")
-        assert result == {'speakers': [], 'conference': '', 'topics': []}
+        assert result == {"speakers": [], "conference": "", "topics": []}
 
     def test_build_prompt_includes_metadata(self):
         """Test that the prompt includes all provided metadata."""
@@ -180,7 +201,7 @@ class TestMetadataExtractorService:
             title="Test Talk",
             description="A description",
             channel_name="Test Channel",
-            tags=["bitcoin", "mining"]
+            tags=["bitcoin", "mining"],
         )
         assert "Test Talk" in prompt
         assert "Test Channel" in prompt
