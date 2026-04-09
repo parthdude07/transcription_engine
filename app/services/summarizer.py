@@ -1,4 +1,8 @@
+import time
+
 import openai
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 from app.config import settings
 from app.logging import get_logger
@@ -19,10 +23,7 @@ class SummarizerService:
             self.client = openai
             self.client.api_key = settings.OPENAI_API_KEY
         elif self.provider == "google":
-            import google.generativeai as genai
-
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            self._genai = genai
+            self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             if self.model == "gpt-4o":  # Default overwrite for google
                 self.model = "gemini-3-flash-preview"
         else:
@@ -149,19 +150,26 @@ Provide a comprehensive summary covering the main topics, key arguments, and imp
                 )
                 return response.choices[0].message.content
             elif self.provider == "google":
-                from google.generativeai.types import GenerationConfig
-
-                model = self._genai.GenerativeModel(
-                    self.model,
-                    generation_config=GenerationConfig(
-                        max_output_tokens=4096,
-                    ),
-                )
-                response = model.generate_content(
-                    prompt,
-                    request_options={"timeout": 300},  # 5 minute timeout
-                )
-                return response.text
+                return self._call_with_retry(prompt, max_tokens=4096)
         except Exception as e:
             logger.error(f"Error during summarization: {e}")
             return ""
+
+    def _call_with_retry(self, prompt, max_tokens=4096, max_retries=4):
+        """Call Gemini with exponential backoff on 503/429 errors."""
+        config = GenerateContentConfig(max_output_tokens=max_tokens)
+        for attempt in range(max_retries):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=config,
+                )
+                return response.text
+            except Exception as e:
+                if ("503" in str(e) or "429" in str(e)) and attempt < max_retries - 1:
+                    wait = 2 ** attempt * 5  # 5, 10, 20, 40 seconds
+                    logger.warning(f"Gemini rate limited (attempt {attempt+1}), waiting {wait}s...")
+                    time.sleep(wait)
+                else:
+                    raise

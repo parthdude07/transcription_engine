@@ -1,5 +1,10 @@
 import json
+import re
+import time
 from datetime import datetime, timezone
+
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 from app.config import settings
 from app.logging import get_logger
@@ -15,7 +20,7 @@ class ContentClassifier:
     def __init__(self):
         self._db = get_database_service()
         self.model = settings.config.get(
-            "classification_model", "gemini-2.0-flash"
+            "classification_model", "gemini-3-flash-preview"
         )
         self.confidence_threshold = float(
             settings.config.get("classification_confidence_threshold", "0.7")
@@ -212,28 +217,28 @@ class ContentClassifier:
 
     def _call_llm(self, prompt: str) -> dict:
         """Call the LLM and parse its classification response."""
-        import google.generativeai as genai
-        from google.generativeai.types import GenerationConfig
+        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+        config = GenerateContentConfig(max_output_tokens=1024)
 
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
-
-        model = genai.GenerativeModel(
-            self.model,
-            generation_config=GenerationConfig(
-                max_output_tokens=1024,
-            ),
-        )
-        response = model.generate_content(
-            prompt, request_options={"timeout": 30}
-        )
-
-        return self._parse_response(response.text)
+        for attempt in range(4):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=config,
+                )
+                return self._parse_response(response.text)
+            except Exception as e:
+                if ("503" in str(e) or "429" in str(e)) and attempt < 3:
+                    wait = 2 ** attempt * 5
+                    logger.warning(f"Gemini rate limited (attempt {attempt+1}), waiting {wait}s...")
+                    time.sleep(wait)
+                else:
+                    raise
 
     @staticmethod
     def _parse_response(response_text: str) -> dict:
         """Parse the LLM JSON response with fallback handling."""
-        import re
-
         try:
             text = response_text.strip()
 

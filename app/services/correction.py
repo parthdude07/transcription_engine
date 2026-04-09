@@ -1,4 +1,8 @@
+import time
+
 import openai
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 from app.config import settings
 from app.logging import get_logger
@@ -21,12 +25,9 @@ class CorrectionService:
             self.client = openai
             self.client.api_key = settings.OPENAI_API_KEY
         elif self.provider == "google":
-            import google.generativeai as genai
-
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            self._genai = genai
+            self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             if self.model == "gpt-4o":  # Default overwrite for google
-                self.model = "gemini-2.0-flash"
+                self.model = "gemini-3-flash-preview"
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")
 
@@ -97,20 +98,7 @@ class CorrectionService:
                     )
                     corrected_text = response.choices[0].message.content
                 elif self.provider == "google":
-                    from google.generativeai.types import GenerationConfig
-
-                    model = self._genai.GenerativeModel(
-                        self.model,
-                        generation_config=GenerationConfig(
-                            max_output_tokens=8192,
-                        ),
-                    )
-                    # Use longer timeout for generation
-                    response = model.generate_content(
-                        prompt,
-                        request_options={"timeout": 300},  # 5 minute timeout
-                    )
-                    corrected_text = response.text
+                    corrected_text = self._call_with_retry(prompt, max_tokens=8192)
 
                 corrected_chunks.append(corrected_text)
                 logger.info(f"Chunk {i}/{num_chunks} correction complete.")
@@ -128,6 +116,25 @@ class CorrectionService:
         logger.info(
             f"Correction complete. Total corrected length: {len(transcript.outputs['corrected_text'])} chars"
         )
+
+    def _call_with_retry(self, prompt, max_tokens=8192, max_retries=4):
+        """Call Gemini with exponential backoff on 503/429 errors."""
+        config = GenerateContentConfig(max_output_tokens=max_tokens)
+        for attempt in range(max_retries):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=config,
+                )
+                return response.text
+            except Exception as e:
+                if ("503" in str(e) or "429" in str(e)) and attempt < max_retries - 1:
+                    wait = 2 ** attempt * 5  # 5, 10, 20, 40 seconds
+                    logger.warning(f"Gemini rate limited (attempt {attempt+1}), waiting {wait}s...")
+                    time.sleep(wait)
+                else:
+                    raise
 
     def _build_enhanced_prompt(self, text, keywords, metadata, global_context):
         prompt = (
