@@ -12,8 +12,8 @@ from app.transcript import Transcript
 
 logger = get_logger()
 
-# Maximum characters per chunk to avoid timeout (roughly 4000 words)
-MAX_CHUNK_SIZE = 20000
+MAX_CHUNK_SIZE = 5000
+MIN_LENGTH_RATIO = 0.7
 
 
 class CorrectionService:
@@ -98,18 +98,35 @@ class CorrectionService:
                     )
                     corrected_text = response.choices[0].message.content
                 elif self.provider == "google":
-                    corrected_text = self._call_with_retry(prompt, max_tokens=8192)
+                    corrected_text = self._call_with_retry(prompt, max_tokens=16384)
 
-                corrected_chunks.append(corrected_text)
-                logger.info(f"Chunk {i}/{num_chunks} correction complete.")
+                # Validate output length — reject truncated responses
+                if len(corrected_text) < len(chunk) * MIN_LENGTH_RATIO:
+                    logger.warning(
+                        f"[CORRECTION TRUNCATED] chunk {i}/{num_chunks}: "
+                        f"output {len(corrected_text)} chars vs input {len(chunk)} chars "
+                        f"({len(corrected_text)/len(chunk):.0%}). Using original."
+                    )
+                    corrected_chunks.append(chunk)
+                else:
+                    corrected_chunks.append(corrected_text)
+                    logger.info(
+                        f"Chunk {i}/{num_chunks} correction complete "
+                        f"({len(chunk)} -> {len(corrected_text)} chars)."
+                    )
 
             except Exception as e:
-                logger.error(f"Error correcting chunk {i}: {e}")
-                # Fall back to original text for this chunk
+                logger.error(
+                    f"[CORRECTION FAILED] chunk {i}/{num_chunks}: {type(e).__name__}: {e}"
+                )
                 corrected_chunks.append(chunk)
                 logger.warning(
-                    f"Using original text for chunk {i} due to error."
+                    f"[CORRECTION FALLBACK] Using original text for chunk {i}/{num_chunks}"
                 )
+
+            # Rate limit between chunks to avoid 429/503
+            if self.provider == "google" and i < num_chunks:
+                time.sleep(2)
 
         # Combine all corrected chunks
         transcript.outputs["corrected_text"] = "\n\n".join(corrected_chunks)
@@ -234,7 +251,10 @@ class CorrectionService:
             prompt += "\n- ".join(keywords)
 
         prompt += f"\n\n--- Transcript Start ---\n\n{text.strip()}\n\n--- Transcript End ---\n\n"
-        prompt += "Return ONLY the corrected transcript. Make minimal changes - fix only obvious errors while "
+        prompt += "Return the COMPLETE corrected transcript — same length, same structure. "
+        prompt += "Do NOT summarize, shorten, or skip any lines. "
+        prompt += "Keep all speaker labels, timestamps, and filler words. "
+        prompt += "Make minimal changes — fix only obvious errors while "
         prompt += "preserving the original wording, sentence structure, and speaker's natural expression."
 
         return prompt

@@ -1,254 +1,244 @@
-# TRANSCRIBER TO BITCOIN TRANSCRIPT
+# Bitcoin Transcription Engine
 
-This project provides a comprehensive toolkit for transcribing audio and video content, specifically designed for seamless submission to the [Bitcoin Transcripts](https://github.com/bitcointranscripts/bitcointranscripts) repository. It automates the entire transcription workflow, from fetching various source types and generating high-quality text, to formatting the final output according to the repository's specific Markdown standards.
+A transcription pipeline for Bitcoin conference talks, podcasts, and technical content. Ingests YouTube videos, transcribes audio via multiple STT providers, corrects transcripts with LLM, extracts metadata, generates summaries, and stores everything in PostgreSQL.
 
-## About the Project
+## Architecture
 
-This tool is designed to make it easy to contribute to Bitcoin Transcripts by automating many of the tedious steps involved in transcription.
+```
+YouTube Video URL
+       |
+  [Preprocess] --> Download video, extract audio (FFmpeg)
+       |
+  [Transcribe] --> STT (Whisper / Deepgram / SmallestAI)
+       |
+  [Metadata Extraction] --> Gemini LLM (speakers, conference, topics)
+       |
+  [Correction] --> Gemini LLM (fix ASR errors, technical terms)
+       |
+  [Summarization] --> Gemini LLM (structured summary)
+       |
+  [Postprocess] --> Export to Markdown, save to PostgreSQL
+```
 
-- **🎙️ Multiple Transcription Engines**: Choose between local transcription with Whisper or cloud-based transcription with [Deepgram](#deepgram-integration).
-- **🔊 Advanced Audio Features**: Get speaker diarization and AI-generated summaries.
-- **🔗 Flexible Source Input**: Transcribe from YouTube videos & playlists, RSS feeds, and local or remote audio & video files.
-- **⚙️ Four-Stage Workflow**: A structured process ensures quality:
-  1.  **Preprocess**: Gathers metadata for each source.
-  2.  **Process**: Downloads and prepares media for transcription.
-  3.  **Transcription**: Generates text using the selected engine.
-  4.  **Postprocess**: Formats the transcript into Markdown, JSON, and other formats.
-- **📤 [GitHub Integration](#github-integration)**: Automatically create pull requests with new transcripts to a repository of choice.
-- **💾 Multiple Export Formats**: Save transcripts as Markdown, JSON, SRT, or plain text.
+### Automated Ingestion Pipeline
 
-## Technical Architecture
+```
+youtube_channels (DB)
+       |
+  [ChannelScanner] --> YouTube Data API v3, discover new videos
+       |
+  [ContentClassifier] --> Gemini LLM, filter technical content
+       |
+  [IngestionService] --> Queue approved videos for transcription
+```
 
-This project is a Python-based command-line application with a client-server architecture.
+## STT Providers
 
-- **Backend**: A Python server that handles the heavy lifting of transcription.
-- **CLI**: A Python client to interact with the server and manage the transcription workflow.
-- **Transcription**: Integrates with [OpenAI's Whisper](https://github.com/openai/whisper) for local processing and [Deepgram](https://deepgram.com/) for a more powerful remote alternative.
+| Provider | Type | Best For |
+|----------|------|----------|
+| **Whisper** | Local (OpenAI) | Offline, privacy-sensitive |
+| **Deepgram** | Cloud API | Fast, accurate, diarization |
+| **SmallestAI** | Cloud API | Multi-speaker, emotion detection |
+
+## LLM Services (Gemini)
+
+All LLM services use `google-genai` SDK with `gemini-3-flash-preview` and include retry logic with exponential backoff for 503/429 errors.
+
+| Service | Purpose | Chunk Size |
+|---------|---------|------------|
+| **MetadataExtractor** | Extract speakers, conference, topics from video metadata | Single call |
+| **CorrectionService** | Fix ASR errors, technical terminology | 5000 chars/chunk |
+| **SummarizerService** | Generate structured summaries | 30000 chars/chunk |
+| **ContentClassifier** | Classify videos as technical/non-technical | Single call |
+
+## Tech Stack
+
+- **Backend**: FastAPI (Python)
+- **Database**: AWS RDS PostgreSQL
+- **Deployment**: AWS EC2 (t3.small)
+- **Frontend**: React + TypeScript + Vite (separate repo)
+- **Frontend Backend**: Express.js (reads from RDS)
+- **Frontend Hosting**: GitHub Pages
+- **HTTPS**: Cloudflare Tunnel
+- **Linting**: Ruff
+
+## Setup
 
 ### Prerequisites
 
-Before you begin, ensure you have the following installed:
+- Python 3.10+
+- [FFmpeg](https://ffmpeg.org/)
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-- Python 3.8+
-- [FFmpeg](https://ffmpeg.org/): For audio/video conversion.
-- [AWS CLI](https://aws.amazon.com/cli/): (Optional) If you plan to use the S3 upload feature.
+### Installation
 
+```bash
+# Clone the repo
+git clone https://github.com/staru09/transcription_engine.git
+cd transcription_engine
 
-## Development Setup
+# Create venv and install deps
+uv venv
+uv pip install -r requirements.txt
 
-We welcome contributions from the community! To get started, you'll need to set up the project on your local machine.
+# Or with pip
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
+pip install -r requirements.txt
+```
 
 ### Configuration
 
-The application is configured using a `.env` file for secrets and a `config.ini` file for other settings.
+```bash
+cp env.example .env
+```
 
-1.  **Create the environment file**:
-    Copy the example file. You will need to fill this out with your own credentials.
-    ```bash
-    cp env.example .env
-    ```
+Required environment variables:
 
-2.  **Create the configuration file**:
-    Copy the example configuration file. You can modify this to set default values for command-line options and various transcription settings.
-    ```bash
-    cp config.ini.example config.ini
-    ```
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string (AWS RDS) |
+| `GOOGLE_API_KEY` | Gemini API for correction, summarization, classification, metadata extraction |
+| `YOUTUBE_API_KEY` | YouTube Data API v3 for channel scanning |
+| `DEEPGRAM_API_KEY` | Deepgram STT (if using Deepgram) |
+| `SMALLEST_API_KEY` | SmallestAI STT (if using SmallestAI) |
 
-### Docker Setup (Recommended)
+Optional:
 
-The easiest way to get started is using Docker Compose.
+| Variable | Purpose |
+|----------|---------|
+| `TRANSCRIPTION_SERVER_URL` | Override transcription server URL (default: `http://localhost:8000`) |
 
-1.  **Start the server**:
-    ```sh
-    docker-compose up server
-    ```
-2.  **Use the CLI**:
-    ```sh
-    docker-compose run --rm cli [command] [arguments]
-    ```
+Pipeline settings are in `config.ini`:
 
-> **Note:**  
-> For more detailed instructions on using Docker with this project, including how to work with local files, environment variables, and custom builds, please refer to our [Docker Guide](docs/docker-guide.md).
-
-### Manual Setup
-
-If you prefer to run the application without Docker:
-
-1.  **Create and activate a virtual environment**:
-    ```sh
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-2.  **Install dependencies**:
-    ```sh
-    # Install the base application
-    pip3 install .
-
-    # To include Whisper for local transcription
-    pip3 install .[whisper]
-
-    # For development, install in editable mode
-    pip3 install -e .
-    ```
-
-3.  **Verify the installation**:
-    ```sh
-    tstbtc --version
-    tstbtc --help
-    ```
+```ini
+[DEFAULT]
+deepgram = True
+diarize = True
+summarize = False
+llm_provider = google
+llm_correction_model = gemini-3-flash-preview
+llm_summary_model = gemini-3-flash-preview
+smallestai = False
+classification_model = gemini-3-flash-preview
+classification_min_duration = 600
+classification_max_duration = 3000
+```
 
 ## Usage
 
-The application has a server component that handles the transcription processing. This allows the heavy 
-lifting of transcription to be done on a separate machine if desired. You can let the CLI manage the server automatically or run it manually.
+### Start the Server
 
-### Server Management
-
-**Automatic Mode (default)**:
-The CLI starts the server automatically when needed. This is the easiest way to use the tool for most users. You can control this behavior with flags like `--auto-server`, `--server-mode`, and `--server-verbose`.
-
-**Manual Mode**:
-For more control, you can manage the server yourself.
-
-```sh
-# Start the server in the background
-tstbtc server start
-
-# Check the server status
-tstbtc server status
-
-# Stop the server
-tstbtc server stop
-
-# View server logs
-tstbtc server logs [--follow] [--lines 100]
+```bash
+python -m uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
-### Transcript Format and Metadata
+### Transcribe a YouTube Video
 
-The primary output of this tool is a Markdown file tailored for the `bitcointranscripts` repository. The format includes a YAML front matter header for metadata, followed by the transcript content.
+Queue a video via the API:
 
-**Metadata Schema:**
-
-The transcript's metadata is structured as follows in a YAML front matter block:
-
-```yaml
----
-title: The title of the content
-date: YYYY-MM-DD
-speakers: ["Speaker One", "Speaker Two"]
-tags: ["tag-one", "tag-two"]
-categories: ["Category"]
----
+```bash
+curl -X POST http://localhost:8000/transcription/add_to_queue/ \
+  -F "source=https://www.youtube.com/watch?v=VIDEO_ID" \
+  -F "loc=tabconf" \
+  -F "username=your_username" \
+  -F "smallestai=true" \
+  -F "diarize=true" \
+  -F "markdown=true" \
+  -F "correct=true" \
+  -F "summarize=true" \
+  -F "llm_provider=google"
 ```
 
-While you can specify all of these using command-line arguments (e.g., `--title`, `--speakers`), the application will attempt to automatically derive as much information as possible during its `preprocess` and `postprocess` stages.
+Start processing:
 
-**File and Directory Structure:**
-
-The final location of the transcript is determined by two key elements:
-
--   **Directory Path (`--loc`)**: This argument specifies the destination directory within the target repository. The directory structure is organized by source, so this value should correspond to the event, podcast, or content series the transcript belongs to (e.g., `stephan-livera-podcast`).
--   **Filename**: The name of the Markdown file is automatically generated by "slugifying" the transcript's title (e.g., `'OP_Vault - A New Way to HODL?'` becomes `op-vault-a-new-way-to-hodl.md`).
-
-**Chapters and Structure:**
-
-The body of the transcript is structured with Markdown headings to represent chapters, which makes the content easier to navigate.
-
-- Chapters are automatically extracted from YouTube videos when available.
-- We are working on a feature to automatically generate chapters during postprocessing for sources that lack them.
-
-### Examples
-
-Here’s how you can use the CLI to transcribe content and generate a fully formatted Markdown file.
-
-**Transcribe a YouTube video:**
-
-This command transcribes an episode from Stephan Livera's podcast. The tool will fetch the video, transcribe it, and use the provided metadata to generate the final Markdown file. The `--loc` and `--title` arguments determine the final path and filename.
-
-```sh
-tstbtc transcribe Nq6WxJ0PgJ4 \
-  --loc "stephan-livera-podcast" \
-  --title 'OP_Vault - A New Way to HODL?' \
-  --date '2023-01-30' \
-  --tags 'script' --tags 'op_vault' \
-  --speakers 'James O’Beirne' --speakers 'Stephan Livera' \
-  --category 'podcast'
-```
-This will result in a file being created at `stephan-livera-podcast/op-vault-a-new-way-to-hodl.md` in the output directory.
-
-**Transcribe a remote audio file:**
-
-You can also transcribe directly from an audio URL. For sources like this where metadata is not readily available, providing it through arguments is essential for a well-formatted output. The same file and directory logic applies.
-
-```shell
-mp3_link="https://anchor.fm/s/7d083a4/podcast/play/64348045/https%3A%2F%2Fd3ctxlq1ktw2nl.cloudfront.net%2Fstaging%2F2023-1-1%2Ff7fafb12-9441-7d85-d557-e9e5d18ab788.mp3"
-
-tstbtc transcribe "$mp3_link" \
-  --loc "stephan-livera-podcast" \
-  --title 'SLP455 Anant Tapadia - Single Sig or Multi Sig?' \
-  --date '2023-02-01' \
-  --tags 'multisig' \
-  --speakers 'Anant Tapadia' \
-  --speakers 'Stephan Livera' \
-  --category 'podcast'
+```bash
+curl -X POST http://localhost:8000/transcription/start/
 ```
 
-## Feature Configuration
+Check queue status:
 
-### Deepgram Integration
-
-To use Deepgram, set your API key in the `.env` file:
+```bash
+curl http://localhost:8000/transcription/queue/
 ```
-DEEPGRAM_API_KEY=your_deepgram_api_key
+
+### Channel Scanner (Automated Ingestion)
+
+Scan a YouTube channel for new videos, classify them, and queue for transcription:
+
+```bash
+# Seed channels
+python -m scripts.seed_channels
+
+# Scan, classify, and queue via API
+curl -X POST http://localhost:8000/ingestion/scan
+curl -X POST http://localhost:8000/ingestion/classify
+curl -X POST http://localhost:8000/ingestion/queue
 ```
-Then, use the `--deepgram` flag when transcribing. Additional features like `--diarize` and `--summarize` will become available.
 
-### AWS S3 Upload
+## API Endpoints
 
-To upload transcription artifacts to S3:
-1. Configure your AWS CLI with credentials that have S3 write access.
-2. Set your bucket name in the `.env` file:
-   ```
-   S3_BUCKET=your-s3-bucket-name
-   ```
-3. Use the `--upload` flag when transcribing.
+### Transcription
 
-### GitHub Integration
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/transcription/add_to_queue/` | Add a video to the transcription queue |
+| POST | `/transcription/start/` | Start processing the queue |
+| GET | `/transcription/queue/` | View current queue status |
+| GET | `/transcription/corrected/` | Get corrected transcripts |
+| GET | `/transcription/summaries/` | Get summaries |
 
-To automatically create pull requests with new transcripts:
-1. Create a GitHub App with permissions for content and pull requests.
-2. Install the app on your fork of the `bitcointranscripts` repository.
-3. Add the app's credentials to your `.env` file:
-   ```
-   GITHUB_APP_ID=your_app_id
-   GITHUB_PRIVATE_KEY_BASE64=your_base64_encoded_private_key
-   GITHUB_INSTALLATION_ID=your_installation_id
-   GITHUB_REPO_OWNER=target_repo_owner
-   GITHUB_REPO_NAME=target_repo_name
-   GITHUB_METADATA_REPO_NAME=target_metadata_repo_name
-   ```
-   > To base64-encode your private key file, run: `base64 -w 0 path/to/your/private-key.pem`
-4. Use the `--github` flag when transcribing.
+### Database (PostgreSQL)
 
-## Testing
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/transcription/db/transcripts/` | All transcripts from DB |
+| GET | `/transcription/db/transcripts/{id}` | Single transcript by ID |
+| GET | `/transcription/db/corrected/` | Corrected transcripts from DB |
+| GET | `/transcription/db/summaries/` | Summaries from DB |
 
-The project includes a comprehensive test suite using pytest.
+### Ingestion
 
-```sh
-# Run all tests
-pytest
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/ingestion/scan` | Scan channels for new videos |
+| POST | `/ingestion/classify` | Classify pending videos |
+| POST | `/ingestion/queue` | Queue approved videos |
 
-# Run specific test categories
-pytest -m unit       # Run only unit tests
-pytest -m exporters  # Run only exporter-related tests
+## Project Structure
 
-# Run with coverage report
-pytest --cov=app
 ```
-> For more details on the testing infrastructure, see the [tests directory README](tests/README.md).
+app/
+  config.py              # Settings, env vars, config.ini
+  transcript.py          # Transcript data model
+  transcription.py       # Pipeline orchestrator
+  media_processor.py     # Audio/video download and conversion
+  services/
+    correction.py        # LLM transcript correction (Gemini)
+    summarizer.py        # LLM summarization (Gemini)
+    metadata_extractor.py # LLM metadata extraction (Gemini)
+    content_classifier.py # LLM content classification (Gemini)
+    channel_scanner.py   # YouTube channel scanning
+    ingestion_service.py # Automated ingestion pipeline
+    database_service.py  # SQLAlchemy ORM for PostgreSQL
+    smallestai.py        # SmallestAI STT provider
+    deepgram.py          # Deepgram STT provider
+routes/
+  transcription.py       # Transcription API routes
+  ingestion.py           # Ingestion API routes
+scripts/
+  scan_tabconf.py        # Standalone channel scanner
+  generate_audio.py      # TTS audio generation
+  seed_channels.py       # Seed YouTube channels in DB
+server.py                # FastAPI app entry point
+config.ini               # Pipeline configuration
+```
+
+## Acknowledgements
+
+This project is a fork of [tstbtc](https://github.com/bitcointranscripts/tstbtc), built by the [Bitcoin Transcripts](https://github.com/bitcointranscripts) team. Their work on creating an open-source transcription pipeline for Bitcoin technical content made this project possible. We've extended the original engine with LLM-powered operations but the core transcription architecture and the vision of making Bitcoin knowledge accessible to everyone comes from their efforts. Thank you to the Bitcoin Transcripts contributors for building and maintaining this foundation.
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE) for more information.
+MIT License. See [LICENSE](LICENSE).
