@@ -53,6 +53,13 @@ def mock_transcript_with_speakers():
     return transcript
 
 
+def _mock_genai_client(response_text):
+    """Helper to set up a mock genai.Client that returns the given text."""
+    mock_client = mock.MagicMock()
+    mock_client.models.generate_content.return_value.text = response_text
+    return mock_client
+
+
 class TestMetadataExtractorService:
     @mock.patch("app.services.metadata_extractor.genai")
     @mock.patch("app.services.metadata_extractor.settings")
@@ -62,13 +69,11 @@ class TestMetadataExtractorService:
         """Test that process() correctly extracts and sets metadata."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
-        # Mock the Gemini model response
-        mock_model_instance = mock.MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.return_value.text = (
+        mock_client = _mock_genai_client(
             '{"speakers": ["Pieter Wuille"], "conference": "Bitcoin 2021", '
             '"topics": ["Taproot", "Schnorr Signatures", "Script Upgrades"]}'
         )
+        mock_genai.Client.return_value = mock_client
 
         service = MetadataExtractorService()
         service.process(mock_transcript)
@@ -89,11 +94,14 @@ class TestMetadataExtractorService:
         """Test that process() skips when no YouTube metadata is present."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
+        mock_client = mock.MagicMock()
+        mock_genai.Client.return_value = mock_client
+
         service = MetadataExtractorService()
         service.process(mock_transcript_no_youtube)
 
         # Should not call the LLM at all
-        mock_genai.GenerativeModel.assert_not_called()
+        mock_client.models.generate_content.assert_not_called()
         # Speakers should remain as manually set
         assert mock_transcript_no_youtube.source.speakers == ["Manual Speaker"]
 
@@ -105,9 +113,10 @@ class TestMetadataExtractorService:
         """Test that manually-set speakers are NOT overwritten."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
-        mock_model_instance = mock.MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.return_value.text = '{"speakers": ["LLM Extracted Speaker"], "conference": "Some Event", "topics": ["Mining"]}'
+        mock_client = _mock_genai_client(
+            '{"speakers": ["LLM Extracted Speaker"], "conference": "Some Event", "topics": ["Mining"]}'
+        )
+        mock_genai.Client.return_value = mock_client
 
         service = MetadataExtractorService()
         service.process(mock_transcript_with_speakers)
@@ -128,11 +137,11 @@ class TestMetadataExtractorService:
         """Test that LLM failure leaves existing metadata intact."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
-        mock_model_instance = mock.MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.side_effect = Exception(
+        mock_client = mock.MagicMock()
+        mock_client.models.generate_content.side_effect = Exception(
             "API Error"
         )
+        mock_genai.Client.return_value = mock_client
 
         service = MetadataExtractorService()
         service.process(mock_transcript)
@@ -150,11 +159,8 @@ class TestMetadataExtractorService:
         """Test graceful handling of malformed LLM JSON response."""
         mock_settings.GOOGLE_API_KEY = "test-key"
 
-        mock_model_instance = mock.MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model_instance
-        mock_model_instance.generate_content.return_value.text = (
-            "not valid json {{"
-        )
+        mock_client = _mock_genai_client("not valid json {{")
+        mock_genai.Client.return_value = mock_client
 
         service = MetadataExtractorService()
         service.process(mock_transcript)

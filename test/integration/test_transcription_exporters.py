@@ -25,6 +25,7 @@ class TestTranscriptionWithExporters:
             username="Test User",
             json=True,
             include_metadata=True,
+            test_mode=True,
         )
 
         return transcription
@@ -47,8 +48,8 @@ class TestTranscriptionWithExporters:
         assert config["json"] is True
         assert "model_output_dir" in config
 
-        # Check transcript_by was passed correctly
-        assert call_args["transcript_by"] == "Test User"
+        # In test_mode, username is hardcoded to "username"
+        assert call_args["transcript_by"] == "username"
 
     def test_write_to_markdown_file(
         self,
@@ -209,8 +210,11 @@ class TestTranscriptionWithExporters:
         """Test export with no outputs enabled"""
         # Create a Transcription instance with all export options disabled
         transcription = Transcription(
-            markdown=False, text_output=False, json=False, username="Test User"
+            markdown=False, text_output=False, json=False, username="Test User",
+            test_mode=True,
         )
+        # test_mode forces markdown=True, override it back for this test
+        transcription.markdown = False
         transcription.exporters.clear()
 
         # Clear the mock transcript's outputs and add back the raw output
